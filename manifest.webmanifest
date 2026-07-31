@@ -1,4 +1,5 @@
 {
+  "id": "./index.html",
   "name": "IntELiMon Plot Data App",
   "short_name": "IntELiMon",
   "description": "Point-intercept, fuel, depth and prism cruise field data collection.",

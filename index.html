@@ -141,11 +141,12 @@ const COVER_DEFAULTS = [
   {slug:'cat9',      label:'',                    group:'Other'},
   {slug:'cat10',     label:'',                    group:'Other'}
 ];
+const BG_INDEX = COVER_DEFAULTS.findIndex(c=>c.slug==='BG');
 const DEPTH_DISTS = [0.5,3.5,6.5,13.5,16.5,19.5];
 const DEPTH_MAX = {fbd:140, litter:20, duff:10};
 const BAF_OPTIONS = [5,10,20,25,30,40];
 const HEADER = [
-  'site','plot','obs','date','time','operator',
+  'site','plot','op1','date','time','op2',
   'grass','forbs','woody','fine_lit','decid_lit','SNLIT','LNLIT','BG','cat9','cat10',
   'fuel_1hr','fuel_10hr','fuel_100hr','fuel_1000hr',
   'BAF','HWPBA','CPBA','SPBA','OPBA','HW_in','CON_in','SNAG_in','OTH_in',
@@ -179,7 +180,7 @@ function newSession(){
   ['NS','WE'].forEach(tr=>{
     for(let d=0.5; d<=19.5; d+=1){
       const dist=Math.round(d*10)/10;
-      const p={transect:tr, dist, cover:null, tallyTouched:false, _i:pi};
+      const p={transect:tr, dist, covers:[], tallyTouched:false, _i:pi};
       pts.push(p); seq.push({type:'point', i:pi}); pi++;
       if(DEPTH_DISTS.includes(dist)){
         dep.push({transect:tr, dist, fbd:null, litter:null, duff:null, _i:di});
@@ -228,7 +229,7 @@ async function createNewFile(site){
 }
 async function openExistingFile(){
   if(!supportsFS){ toast('Open existing needs Chrome file access'); return; }
-  const [h]=await window.showOpenFilePicker({types:[{description:'CSV file', accept:{'text/csv':['.csv']}}]});
+  const [h]=await window.showOpenFilePicker({excludeAcceptAllOption:false, types:[{description:'CSV or text', accept:{'text/csv':['.csv'],'text/plain':['.csv','.txt'],'application/vnd.ms-excel':['.csv'],'application/octet-stream':['.csv']}}]});
   const txt=await readFile(h);
   const firstLine=(txt.split('\n')[0]||'').trim();
   if(firstLine && firstLine.split(',')[0]!=='site'){
@@ -244,7 +245,12 @@ function downloadText(text, name){
 }
 
 /* ---------- CSV row build ---------- */
-function coverTotals(){const t={}; COVER_DEFAULTS.forEach(c=>t[c.slug]=0); state.points.forEach(p=>{if(p.cover!=null)t[COVER_DEFAULTS[p.cover].slug]++;}); return t;}
+function coverTotals(){const t={}; COVER_DEFAULTS.forEach(c=>t[c.slug]=0); state.points.forEach(p=>{p.covers.forEach(i=>t[COVER_DEFAULTS[i].slug]++);}); return t;}
+function toggleCover(p,i){
+  const has=p.covers.includes(i);
+  if(i===BG_INDEX){ p.covers = has ? [] : [BG_INDEX]; }
+  else { p.covers = p.covers.filter(x=>x!==BG_INDEX); p.covers = has ? p.covers.filter(x=>x!==i) : p.covers.concat(i); }
+}
 function depthMean(key){const v=state.depths.map(d=>d[key]).filter(x=>x!=null && x!==''); if(!v.length)return ''; return (v.reduce((a,b)=>a+ +b,0)/v.length).toFixed(1);}
 function buildRow(){
   const m=state.meta, f=state.fuel, pr=state.prism, ct=coverTotals();
@@ -303,15 +309,17 @@ function screenProject(){
     <div class="spacer"></div>
     ${fileName?`<div class="filebar"><p class="lab">Active file</p><p class="nm">${fileName}</p><p class="meta" id="fmeta"></p></div>`:`<div class="filebar warn"><p class="nm">No file selected yet</p><p class="meta">Create or open a CSV to begin.</p></div>`}
     <button class="btn primary mt14" id="tonew">Start a plot →</button>
+    ${deferredPrompt?'<button class="btn mt10" id="installbtn">⬇ Install app to home screen</button>':(isStandalone()?'':'<p class="foot">Not installed yet? In Chrome tap ⋮ (top-right) → “Install app” or “Add to Home screen”.</p>')}
     ${!supportsFS?'<p class="foot">This browser lacks direct file editing; the app will download a fresh file on each record. Use Chrome on Android for single-file append.</p>':''}
   `);
+  const ib=$('installbtn'); if(ib) ib.onclick=async()=>{ if(!deferredPrompt)return; deferredPrompt.prompt(); try{await deferredPrompt.userChoice;}catch(e){} deferredPrompt=null; screenProject(); };
   const siteEl=$('site');
   siteEl.addEventListener('input',()=>{ if(state)state.meta.site=siteEl.value.toUpperCase(); });
   $('newf').onclick=async()=>{
     const site=siteEl.value.trim(); if(!site){toast('Enter a site code first');return;}
     try{ await createNewFile(site); if(state)state.meta.site=site.toUpperCase(); screenProject(); toast('File created'); }catch(e){ if(e.name!=='AbortError')toast('Could not create file'); }
   };
-  $('openf').onclick=async()=>{ try{ await openExistingFile(); screenProject(); if(fileName)toast('File opened'); }catch(e){ if(e.name!=='AbortError')toast('Could not open file'); } };
+  $('openf').onclick=async()=>{ try{ await openExistingFile(); screenProject(); if(fileName)toast('File opened'); }catch(e){ if(e.name!=='AbortError')toast('Open failed: '+(e.name||e.message||'error')); } };
   $('tonew').onclick=()=>{
     if(!fileName){toast('Create or open a file first');return;}
     state.meta.site=siteEl.value.trim().toUpperCase();
@@ -326,10 +334,10 @@ function screenPlotStart(){
     <div class="navbar"><button class="navlink" id="back">← project</button><span class="ctx">New plot</span><span style="width:60px"></span></div>
     <img class="logo" src="./logo.png" alt=""/>
     <p class="sub">Site ${state.meta.site} · ${fileName}</p>
-    <div class="field mt14"><label>Plot name (4)</label><input id="plot" class="code" maxlength="4" placeholder="P07N" value="${state.meta.plot}"/></div>
+    <div class="field mt14"><label>Plot name (4)</label><input id="plot" class="code" maxlength="4" placeholder="0001" value="${state.meta.plot||'0001'}"/></div>
     <div class="row2">
-      <div class="field"><label>Observer initials</label><input id="obs" class="code" maxlength="4" placeholder="SDR" value="${state.meta.obs}"/></div>
-      <div class="field"><label>Operator initials</label><input id="oper" class="code" maxlength="4" placeholder="JKM" value="${state.meta.operator}"/></div>
+      <div class="field"><label>Operator 1 initials</label><input id="obs" class="code" maxlength="4" placeholder="OP1" value="${state.meta.obs}"/></div>
+      <div class="field"><label>Operator 2 initials</label><input id="oper" class="code" maxlength="4" placeholder="OP2" value="${state.meta.operator}"/></div>
     </div>
     <div class="spacer"></div>
     <button class="btn go" id="scan">▶ Scan started</button>
@@ -368,7 +376,7 @@ function screenPoint(p){
     idxs.forEach(i=>{
       const lbl=cats.cover[i];
       const blank=!lbl;
-      chipsHtml+=`<div class="chip ${p.cover===i?'sel':''} ${blank?'blank':''}" data-i="${i}">${blank?'＋ add':lbl}<span class="ed">✎</span></div>`;
+      chipsHtml+=`<div class="chip ${p.covers.includes(i)?'sel':''} ${blank?'blank':''}" data-i="${i}">${blank?'＋ add':lbl}<span class="ed">✎</span></div>`;
     });
     chipsHtml+='</div>';
   });
@@ -397,7 +405,7 @@ function screenPoint(p){
     el.addEventListener('click',()=>{
       if(held){held=false;return;}
       if(!cats.cover[i]){ renameCover(i); return; } // blank → edit
-      p.cover=(p.cover===i?null:i); renderSeq();
+      toggleCover(p,i); renderSeq();
     });
   });
   // tally
@@ -405,7 +413,7 @@ function screenPoint(p){
   document.querySelectorAll('[data-dec]').forEach(b=>b.onclick=()=>{const k=b.dataset.dec;if(state.fuel[k]>0)state.fuel[k]--;p.tallyTouched=true;$('tv-'+k).textContent=state.fuel[k];});
   $('back').onclick=goBack;
   $('next').onclick=()=>{
-    if(p.cover===null && !p.tallyTouched){
+    if(p.covers.length===0 && !p.tallyTouched){
       confirmModal({icon:'warn', title:'Nothing was added to the last point', body:`No cover category or fuel tally was recorded for point ${pointNo}.`, ok:'Continue anyway', okStyle:'warn', onOk:advance});
     }else advance();
   };
@@ -481,7 +489,7 @@ function screenPrism(){
 /* --- Export / Add record --- */
 function screenExport(){
   const m=state.meta;
-  const nPts=state.points.filter(p=>p.cover!=null).length;
+  const nPts=state.points.filter(p=>p.covers.length>0).length;
   const nDep=state.depths.filter(d=>d.fbd!=null||d.litter!=null||d.duff!=null).length;
   const rowPreview=buildRow();
   show(`
@@ -559,6 +567,12 @@ function enableSwipe(el,onLeft,onRight){
   el.ontouchstart=e=>{const tg=e.target;if(tg.closest('button,input,select,.chip')){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;};
   el.ontouchend=e=>{if(x0==null)return;const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;if(Math.abs(dx)>60&&Math.abs(dy)<45){dx<0?onLeft():onRight();}x0=null;};
 }
+
+/* ---------- install prompt ---------- */
+let deferredPrompt=null;
+function isStandalone(){return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone===true;}
+window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredPrompt=e; if(document.getElementById('site')) screenProject(); });
+window.addEventListener('appinstalled',()=>{ deferredPrompt=null; toast('App installed to home screen'); });
 
 /* ---------- boot ---------- */
 async function boot(){
