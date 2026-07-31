@@ -2,7 +2,7 @@
 
 An offline, installable field data collection app (PWA) for point-intercept, time-lag fuel,
 fuel-depth, and prism-cruise data. Built for **Android / Chrome**. Outputs one CSV row per plot,
-appended to a single file per site.
+appended to a single file per monitoring campaign.
 
 ---
 
@@ -31,20 +31,6 @@ label) persist on the device. **Long-press a category to rename it.**
   warning naming the issue.
 
 ---
-
-## Host it (one-time, ~5 min)
-
-The app must be served over HTTPS once so it can install and cache for offline use.
-GitHub Pages is the easy path:
-
-1. Create a new GitHub repo and upload **all files in this folder** to the repo root
-   (`index.html`, `manifest.webmanifest`, `sw.js`, `logo.png`, the three icons, this README).
-2. In the repo: **Settings → Pages → Build and deployment → Source: Deploy from a branch**,
-   pick `main` / `/root`, save.
-3. Wait ~1 minute. Pages gives you an HTTPS URL like
-   `https://YOURNAME.github.io/YOUR-REPO/`.
-
-(Netlify or Cloudflare Pages work identically — drag the folder in.)
 
 ## Install on the phone (one-time)
 
