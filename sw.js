@@ -1,6 +1,6 @@
 // IntELiMon Plot Data App — offline service worker
 // Bump CACHE version whenever you change any cached file so devices pull the update.
-const CACHE = 'intelimon-v2';
+const CACHE = 'intelimon-v3';
 const ASSETS = [
   './',
   './index.html',
