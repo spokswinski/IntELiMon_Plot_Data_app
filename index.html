@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<meta name="theme-color" content="#1a1410"/>
+<link rel="manifest" href="./manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="./icon-192.png"/>
+<title>IntELiMon Plot Data App</title>
+<style>
+  :root{
+    --bg:#f6f2ea; --surface:#ffffff; --surface2:#efe8dc; --line:#d9cfbf;
+    --ink:#241c14; --muted:#6f6455;
+    --gold:#b0770f; --gold-fill:#c6871a; --gold-bg:#f7ecd6;
+    --green:#2c7a4c; --green-bg:#e3f1e8; --green-line:#a9d4ba;
+    --red:#c0392b; --red-bg:#fbe7e4; --red-line:#eab6ae;
+    --sel:#2c7a4c; --sel-ink:#ffffff;
+    --radius:12px; --tap:48px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    background:var(--bg); color:var(--ink);
+    font-size:16px; line-height:1.4;
+    overscroll-behavior:none;
+  }
+  #app{max-width:520px; margin:0 auto; min-height:100%; display:flex; flex-direction:column;}
+  .screen{flex:1; display:flex; flex-direction:column; padding:14px 14px calc(14px + env(safe-area-inset-bottom)); min-height:100vh;}
+  .hide{display:none !important;}
+
+  h1{font-size:20px; font-weight:700; margin:0; text-align:center;}
+  .sub{font-size:12px; color:var(--muted); text-align:center; margin:2px 0 0;}
+  label{font-size:13px; color:var(--muted); display:block; margin:0 0 4px;}
+  input,select{
+    width:100%; height:var(--tap); font-size:17px; padding:0 12px;
+    border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--surface); color:var(--ink);
+  }
+  input.code{text-transform:uppercase; letter-spacing:3px; font-weight:600;}
+  input:focus,select:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 2px var(--gold-bg);}
+  .field{margin-bottom:12px;}
+
+  button{font-family:inherit;}
+  .btn{
+    width:100%; min-height:var(--tap); border-radius:var(--radius);
+    border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    font-size:16px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:10px 12px; cursor:pointer;
+  }
+  .btn:active{transform:scale(0.99);}
+  .btn.primary{background:var(--gold-fill); border-color:var(--gold-fill); color:#fff;}
+  .btn.go{background:var(--green); border-color:var(--green); color:#fff; min-height:58px; font-size:18px;}
+  .btn.ghost{background:transparent;}
+  .btn.sm{min-height:40px; font-size:14px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  .logo{display:block; width:118px; height:auto; margin:6px auto 8px;}
+  .filebar{background:var(--green-bg); border:1px solid var(--green-line); border-radius:10px; padding:9px 12px;}
+  .filebar .lab{font-size:11px; color:var(--muted); margin:0 0 2px;}
+  .filebar .nm{font-size:13px; font-weight:600; color:var(--green); margin:0; word-break:break-all;}
+  .filebar .meta{font-size:11px; color:var(--muted); margin:3px 0 0;}
+  .filebar.warn{background:var(--gold-bg); border-color:#e3c78a;}
+  .filebar.warn .nm{color:var(--gold);}
+
+  .navbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; min-height:32px;}
+  .navbar .ctx{font-size:13px; font-weight:700;}
+  .navlink{font-size:14px; color:var(--muted); background:none; border:none; padding:6px 4px; cursor:pointer; font-weight:600;}
+  .navlink[disabled]{opacity:0.3;}
+
+  .grouplab{font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--gold); margin:8px 0 5px;}
+  .chips{display:grid; gap:6px;}
+  .chips.c3{grid-template-columns:repeat(3,1fr);}
+  .chips.c2{grid-template-columns:repeat(2,1fr);}
+  .chip{
+    min-height:52px; border:1px solid var(--line); border-radius:10px; background:var(--surface);
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    font-size:13px; font-weight:600; padding:6px 4px; cursor:pointer; line-height:1.2; position:relative;
+  }
+  .chip.sel{background:var(--sel); border-color:var(--sel); color:var(--sel-ink);}
+  .chip.blank{border-style:dashed; color:var(--muted); font-weight:500;}
+  .chip .ed{position:absolute; top:3px; right:5px; font-size:10px; color:var(--muted); opacity:.7;}
+  .chip.sel .ed{color:#fff; opacity:.8;}
+
+  .tallywrap{margin-top:auto; border-top:1px solid var(--line); padding-top:8px;}
+  .tallywrap .cap{font-size:11px; color:var(--muted); text-align:center; margin:0 0 6px;}
+  .tallies{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .tally{background:var(--surface2); border-radius:10px; padding:6px 8px; display:flex; align-items:center; justify-content:space-between;}
+  .tally .mid{text-align:center; min-width:40px;}
+  .tally .t-lab{font-size:10px; color:var(--muted); line-height:1;}
+  .tally .t-val{font-size:20px; font-weight:700; line-height:1.1;}
+  .stepbtn{
+    width:44px; height:44px; border-radius:9px; border:1px solid var(--line); background:var(--surface);
+    font-size:24px; font-weight:600; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);
+  }
+  .stepbtn:active{background:var(--surface2);}
+
+  .alertbar{background:var(--red-bg); border:1px solid var(--red-line); border-radius:10px; padding:13px; text-align:center; margin-bottom:16px;}
+  .alertbar b{color:var(--red); font-size:16px;}
+
+  .summary{background:var(--surface2); border-radius:10px; padding:11px 13px; font-size:13px;}
+  .summary .r{display:flex; justify-content:space-between; padding:3px 0;}
+  .summary .r span{color:var(--muted);} .summary .r b{font-weight:700;}
+  .prismnote{background:var(--gold-bg); border-radius:9px; padding:9px 12px; font-size:12px; color:var(--gold); margin-top:14px; line-height:1.5;}
+  .csvbox{background:var(--surface2); border:1px solid var(--line); border-radius:8px; padding:8px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10px; color:var(--muted); overflow-x:auto; white-space:pre;}
+
+  .spacer{flex:1;}
+  .foot{font-size:11px; color:var(--muted); text-align:center; margin-top:10px;}
+  .mt10{margin-top:10px;} .mt14{margin-top:14px;} .mt8{margin-top:8px;}
+
+  .modal-bg{position:fixed; inset:0; background:rgba(20,15,10,.55); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50;}
+  .modal{background:var(--surface); border-radius:16px; padding:20px 18px; width:100%; max-width:380px; text-align:center;}
+  .modal .ic{width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; font-size:26px; font-weight:700;}
+  .modal .ic.warn{background:var(--gold-bg); color:var(--gold);}
+  .modal .ic.dang{background:var(--red-bg); color:var(--red);}
+  .modal h3{margin:0 0 6px; font-size:17px;}
+  .modal p{margin:0 0 14px; font-size:13px; color:var(--muted);}
+  .modal .issues{text-align:left; background:var(--surface2); border-radius:8px; padding:10px 12px; margin:0 0 16px;}
+  .modal .issues div{font-size:13px; color:var(--red); padding:2px 0;}
+  .rename input{margin:6px 0 16px;}
+  .toast{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:24px; font-size:14px; font-weight:600; z-index:60; max-width:88%; text-align:center;}
+</style>
+</head>
+<body>
+<div id="app"><div id="root" class="screen"></div></div>
+<div id="overlay"></div>
+
+<script>
+"use strict";
+
+/* ---------- constants ---------- */
+const COVER_DEFAULTS = [
+  {slug:'grass',     label:'Grass',               group:'Live fuel'},
+  {slug:'forbs',     label:'Forbs',               group:'Live fuel'},
+  {slug:'woody',     label:'Woody',               group:'Live fuel'},
+  {slug:'fine_lit',  label:'Fine Litter',         group:'Litter'},
+  {slug:'decid_lit', label:'Deciduous Litter',    group:'Litter'},
+  {slug:'SNLIT',     label:'Short Needle Litter',  group:'Litter'},
+  {slug:'LNLIT',     label:'Long Needle Litter',   group:'Litter'},
+  {slug:'BG',        label:'Bare Ground',         group:'Other'},
+  {slug:'cat9',      label:'',                    group:'Other'},
+  {slug:'cat10',     label:'',                    group:'Other'}
+];
+const DEPTH_DISTS = [0.5,3.5,6.5,13.5,16.5,19.5];
+const DEPTH_MAX = {fbd:140, litter:20, duff:10};
+const BAF_OPTIONS = [5,10,20,25,30,40];
+const HEADER = [
+  'site','plot','obs','date','time','operator',
+  'grass','forbs','woody','fine_lit','decid_lit','SNLIT','LNLIT','BG','cat9','cat10',
+  'fuel_1hr','fuel_10hr','fuel_100hr','fuel_1000hr',
+  'BAF','HWPBA','CPBA','SPBA','OPBA','HW_in','CON_in','SNAG_in','OTH_in',
+  'MFBD','MLD','MDD'
+];
+
+/* ---------- persistence: category labels ---------- */
+function loadCats(){
+  try{
+    const s = JSON.parse(localStorage.getItem('intelimon_cats'));
+    if(s && Array.isArray(s.cover) && s.cover.length===10) return s;
+  }catch(e){}
+  return {cover:COVER_DEFAULTS.map(c=>c.label), otherIn:'Other in'};
+}
+function saveCats(){ localStorage.setItem('intelimon_cats', JSON.stringify(cats)); }
+let cats = loadCats();
+
+/* ---------- tiny IndexedDB for the file handle ---------- */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('intelimon',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function idbSet(k,v){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+async function idbGet(k){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction('kv','readonly');const q=t.objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+
+/* ---------- app state ---------- */
+const supportsFS = 'showSaveFilePicker' in window;
+let fileHandle=null, fileName=null;
+let state=null; // active plot session
+
+function newSession(){
+  const pts=[], dep=[], seq=[];
+  let pi=0, di=0;
+  ['NS','WE'].forEach(tr=>{
+    for(let d=0.5; d<=19.5; d+=1){
+      const dist=Math.round(d*10)/10;
+      const p={transect:tr, dist, cover:null, tallyTouched:false, _i:pi};
+      pts.push(p); seq.push({type:'point', i:pi}); pi++;
+      if(DEPTH_DISTS.includes(dist)){
+        dep.push({transect:tr, dist, fbd:null, litter:null, duff:null, _i:di});
+        seq.push({type:'depth', i:di}); di++;
+      }
+    }
+  });
+  return {
+    meta:{site:'', plot:'', obs:'', operator:'', date:'', time:''},
+    points:pts, depths:dep, seq, idx:0,
+    fuel:{oneHr:0, tenHr:0, hundredHr:0, thousandHr:0},
+    prism:{baf:10, hw:0, con:0, snag:0, other:0}
+  };
+}
+
+/* ---------- helpers ---------- */
+const $=(id)=>document.getElementById(id);
+const root=$('root'), overlay=$('overlay');
+function esc(s){s=String(s==null?'':s); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function nowParts(){const n=new Date();const p=x=>String(x).padStart(2,'0');return {date:`${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}`, time:`${p(n.getHours())}${p(n.getMinutes())}`};}
+function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
+function clearOverlay(){overlay.innerHTML='';}
+
+/* ---------- File System Access ---------- */
+async function verifyPerm(h){
+  if(!h.queryPermission) return true;
+  const opts={mode:'readwrite'};
+  if((await h.queryPermission(opts))==='granted') return true;
+  return (await h.requestPermission(opts))==='granted';
+}
+async function readFile(h){const f=await h.getFile();return await f.text();}
+async function writeFile(h,text){const w=await h.createWritable();await w.write(text);await w.close();}
+
+async function createNewFile(site){
+  const {date}=nowParts();
+  const suggested=`${(site||'SITE').toUpperCase()}_${date}.csv`;
+  if(supportsFS){
+    const h=await window.showSaveFilePicker({suggestedName:suggested, types:[{description:'CSV file', accept:{'text/csv':['.csv']}}]});
+    await writeFile(h, HEADER.join(',')+'\n');
+    fileHandle=h; fileName=h.name; await idbSet('fileHandle',h);
+  }else{
+    fileName=suggested; localStorage.setItem('intelimon_fallback_header','1');
+    localStorage.setItem('intelimon_records','[]');
+    downloadText(HEADER.join(',')+'\n', suggested);
+  }
+}
+async function openExistingFile(){
+  if(!supportsFS){ toast('Open existing needs Chrome file access'); return; }
+  const [h]=await window.showOpenFilePicker({types:[{description:'CSV file', accept:{'text/csv':['.csv']}}]});
+  const txt=await readFile(h);
+  const firstLine=(txt.split('\n')[0]||'').trim();
+  if(firstLine && firstLine.split(',')[0]!=='site'){
+    if(!confirm('This file does not look like an IntELiMon export (header differs). Append to it anyway?')) return;
+  }
+  fileHandle=h; fileName=h.name; await idbSet('fileHandle',h);
+}
+function downloadText(text, name){
+  const blob=new Blob([text],{type:'text/csv'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+/* ---------- CSV row build ---------- */
+function coverTotals(){const t={}; COVER_DEFAULTS.forEach(c=>t[c.slug]=0); state.points.forEach(p=>{if(p.cover!=null)t[COVER_DEFAULTS[p.cover].slug]++;}); return t;}
+function depthMean(key){const v=state.depths.map(d=>d[key]).filter(x=>x!=null && x!==''); if(!v.length)return ''; return (v.reduce((a,b)=>a+ +b,0)/v.length).toFixed(1);}
+function buildRow(){
+  const m=state.meta, f=state.fuel, pr=state.prism, ct=coverTotals();
+  const vals=[
+    m.site, m.plot, m.obs, m.date, m.time, m.operator,
+    ct.grass,ct.forbs,ct.woody,ct.fine_lit,ct.decid_lit,ct.SNLIT,ct.LNLIT,ct.BG,ct.cat9,ct.cat10,
+    f.oneHr,f.tenHr,f.hundredHr,f.thousandHr,
+    pr.baf, pr.hw*pr.baf, pr.con*pr.baf, pr.snag*pr.baf, pr.other*pr.baf, pr.hw,pr.con,pr.snag,pr.other,
+    depthMean('fbd'),depthMean('litter'),depthMean('duff')
+  ];
+  return vals.map(esc).join(',');
+}
+
+/* ---------- append record ---------- */
+async function addRecord(){
+  const row=buildRow();
+  // internal backup always
+  try{const b=JSON.parse(localStorage.getItem('intelimon_records')||'[]'); b.push(row); localStorage.setItem('intelimon_records',JSON.stringify(b));}catch(e){}
+  if(supportsFS && fileHandle){
+    if(!(await verifyPerm(fileHandle))){ toast('File permission denied'); return false; }
+    let txt=await readFile(fileHandle);
+    if(txt.length && !txt.endsWith('\n')) txt+='\n';
+    if(!txt.trim()) txt=HEADER.join(',')+'\n';
+    await writeFile(fileHandle, txt+row+'\n');
+    return true;
+  }else{
+    // fallback: re-save full accumulated file
+    const b=JSON.parse(localStorage.getItem('intelimon_records')||'[]');
+    downloadText(HEADER.join(',')+'\n'+b.join('\n')+'\n', fileName||'intelimon.csv');
+    return true;
+  }
+}
+async function fileHasDuplicate(){
+  if(!(supportsFS && fileHandle)) return false;
+  try{
+    const txt=await readFile(fileHandle); const m=state.meta;
+    return txt.split('\n').slice(1).some(l=>{const c=l.split(',');return c[0]===m.site && c[1]===m.plot && c[3]===m.date;});
+  }catch(e){return false;}
+}
+
+/* ================= SCREENS ================= */
+function show(html){root.innerHTML=html;}
+
+/* --- Project setup --- */
+function screenProject(){
+  show(`
+    <img class="logo" src="./logo.png" alt="IntELiMon logo"/>
+    <h1>IntELiMon Plot Data App</h1>
+    <p class="sub">Pick a file, then run plots</p>
+    <div class="field mt14">
+      <label>Site code (5)</label>
+      <input id="site" class="code" maxlength="5" placeholder="ELMTN" value="${state?state.meta.site:''}"/>
+    </div>
+    <button class="btn mt8" id="newf"><span>＋</span> New file</button>
+    <button class="btn mt10" id="openf"><span>📂</span> Open existing</button>
+    <div class="spacer"></div>
+    ${fileName?`<div class="filebar"><p class="lab">Active file</p><p class="nm">${fileName}</p><p class="meta" id="fmeta"></p></div>`:`<div class="filebar warn"><p class="nm">No file selected yet</p><p class="meta">Create or open a CSV to begin.</p></div>`}
+    <button class="btn primary mt14" id="tonew">Start a plot →</button>
+    ${!supportsFS?'<p class="foot">This browser lacks direct file editing; the app will download a fresh file on each record. Use Chrome on Android for single-file append.</p>':''}
+  `);
+  const siteEl=$('site');
+  siteEl.addEventListener('input',()=>{ if(state)state.meta.site=siteEl.value.toUpperCase(); });
+  $('newf').onclick=async()=>{
+    const site=siteEl.value.trim(); if(!site){toast('Enter a site code first');return;}
+    try{ await createNewFile(site); if(state)state.meta.site=site.toUpperCase(); screenProject(); toast('File created'); }catch(e){ if(e.name!=='AbortError')toast('Could not create file'); }
+  };
+  $('openf').onclick=async()=>{ try{ await openExistingFile(); screenProject(); if(fileName)toast('File opened'); }catch(e){ if(e.name!=='AbortError')toast('Could not open file'); } };
+  $('tonew').onclick=()=>{
+    if(!fileName){toast('Create or open a file first');return;}
+    state.meta.site=siteEl.value.trim().toUpperCase();
+    if(!state.meta.site){toast('Enter a site code');return;}
+    screenPlotStart();
+  };
+}
+
+/* --- Plot start --- */
+function screenPlotStart(){
+  show(`
+    <div class="navbar"><button class="navlink" id="back">← project</button><span class="ctx">New plot</span><span style="width:60px"></span></div>
+    <img class="logo" src="./logo.png" alt=""/>
+    <p class="sub">Site ${state.meta.site} · ${fileName}</p>
+    <div class="field mt14"><label>Plot name (4)</label><input id="plot" class="code" maxlength="4" placeholder="P07N" value="${state.meta.plot}"/></div>
+    <div class="row2">
+      <div class="field"><label>Observer initials</label><input id="obs" class="code" maxlength="4" placeholder="SDR" value="${state.meta.obs}"/></div>
+      <div class="field"><label>Operator initials</label><input id="oper" class="code" maxlength="4" placeholder="JKM" value="${state.meta.operator}"/></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn go" id="scan">▶ Scan started</button>
+    <p class="foot">Logs date (YYYYMMDD) + time (HHMM) when pressed</p>
+  `);
+  $('back').onclick=screenProject;
+  $('scan').onclick=()=>{
+    const plot=$('plot').value.trim().toUpperCase();
+    if(!plot){toast('Enter a plot name');return;}
+    state.meta.plot=plot;
+    state.meta.obs=$('obs').value.trim().toUpperCase();
+    state.meta.operator=$('oper').value.trim().toUpperCase();
+    const t=nowParts(); state.meta.date=t.date; state.meta.time=t.time;
+    state.idx=0; renderSeq();
+  };
+}
+
+/* --- sequence driver --- */
+function renderSeq(){
+  const s=state.seq[state.idx];
+  if(!s){ screenPrism(); return; }
+  if(s.type==='point') screenPoint(state.points[s.i]);
+  else screenDepth(state.depths[s.i]);
+}
+function advance(){ if(state.idx>=state.seq.length-1){ screenPrism(); } else { state.idx++; renderSeq(); } }
+function goBack(){ if(state.idx>0){ state.idx--; renderSeq(); } else { screenPlotStart(); } }
+
+/* --- Point intercept --- */
+function screenPoint(p){
+  const pointNo=p._i+1;
+  const arm=p.transect==='NS'?'N→S':'W→E';
+  const groups=[['Live fuel','c3',[0,1,2]],['Litter','c2',[3,4,5,6]],['Other','c3',[7,8,9]]];
+  let chipsHtml='';
+  groups.forEach(([g,cls,idxs])=>{
+    chipsHtml+=`<div class="grouplab">${g}</div><div class="chips ${cls}">`;
+    idxs.forEach(i=>{
+      const lbl=cats.cover[i];
+      const blank=!lbl;
+      chipsHtml+=`<div class="chip ${p.cover===i?'sel':''} ${blank?'blank':''}" data-i="${i}">${blank?'＋ add':lbl}<span class="ed">✎</span></div>`;
+    });
+    chipsHtml+='</div>';
+  });
+  const f=state.fuel;
+  const tally=(key,lab,val)=>`<div class="tally"><button class="stepbtn" data-dec="${key}">−</button><div class="mid"><div class="t-lab">${lab}</div><div class="t-val" id="tv-${key}">${val}</div></div><button class="stepbtn" data-inc="${key}">＋</button></div>`;
+  show(`
+    <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Point ${pointNo} / 40 · ${arm} ${p.dist}m</span><button class="navlink" id="next">next →</button></div>
+    <div id="covers">${chipsHtml}</div>
+    <div class="tallywrap">
+      <p class="cap">Time-lag fuel tally (running)</p>
+      <div class="tallies">
+        ${tally('oneHr','1-hr',f.oneHr)}${tally('tenHr','10-hr',f.tenHr)}
+        ${tally('hundredHr','100-hr',f.hundredHr)}${tally('thousandHr','1000-hr',f.thousandHr)}
+      </div>
+    </div>
+  `);
+  // cover selection + rename
+  document.querySelectorAll('#covers .chip').forEach(el=>{
+    const i=+el.dataset.i;
+    let timer=null, held=false;
+    const startHold=()=>{held=false; timer=setTimeout(()=>{held=true; renameCover(i);},550);};
+    const endHold=()=>{clearTimeout(timer);};
+    el.addEventListener('touchstart',startHold,{passive:true});
+    el.addEventListener('touchend',endHold);
+    el.addEventListener('touchmove',endHold,{passive:true});
+    el.addEventListener('click',()=>{
+      if(held){held=false;return;}
+      if(!cats.cover[i]){ renameCover(i); return; } // blank → edit
+      p.cover=(p.cover===i?null:i); renderSeq();
+    });
+  });
+  // tally
+  document.querySelectorAll('[data-inc]').forEach(b=>b.onclick=()=>{const k=b.dataset.inc;state.fuel[k]++;p.tallyTouched=true;$('tv-'+k).textContent=state.fuel[k];});
+  document.querySelectorAll('[data-dec]').forEach(b=>b.onclick=()=>{const k=b.dataset.dec;if(state.fuel[k]>0)state.fuel[k]--;p.tallyTouched=true;$('tv-'+k).textContent=state.fuel[k];});
+  $('back').onclick=goBack;
+  $('next').onclick=()=>{
+    if(p.cover===null && !p.tallyTouched){
+      confirmModal({icon:'warn', title:'Nothing was added to the last point', body:`No cover category or fuel tally was recorded for point ${pointNo}.`, ok:'Continue anyway', okStyle:'warn', onOk:advance});
+    }else advance();
+  };
+  enableSwipe(root, advance, goBack);
+}
+function renameCover(i){
+  renamePrompt(cats.cover[i]||'', COVER_DEFAULTS[i].group+' slot', (val)=>{ cats.cover[i]=val.trim(); saveCats(); renderSeq(); });
+}
+
+/* --- Depth --- */
+function screenDepth(d){
+  const arm=d.transect==='NS'?'N→S':'W→E';
+  const inp=(k,lab,val)=>`<label>${lab} (cm)</label><input id="d-${k}" inputmode="decimal" class="field" value="${val==null?'':val}"/>`;
+  show(`
+    <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Depth · ${arm} ${d.dist}m</span><button class="navlink" id="next">next →</button></div>
+    <div class="alertbar"><b>⚠ Take depth measurements here</b></div>
+    ${inp('fbd','Fuel bed depth',d.fbd)}
+    ${inp('litter','Litter depth',d.litter)}
+    ${inp('duff','Duff depth',d.duff)}
+    <div class="spacer"></div>
+    <button class="btn primary" id="save">Save + continue</button>
+  `);
+  const read=()=>{['fbd','litter','duff'].forEach(k=>{const v=$('d-'+k).value.trim(); d[k]=v===''?null:parseFloat(v);});};
+  $('back').onclick=()=>{read();goBack();};
+  const proceed=()=>{
+    read();
+    const issues=[];
+    [['fbd','Fuel bed depth'],['litter','Litter depth'],['duff','Duff depth']].forEach(([k,lab])=>{
+      if(d[k]==null || isNaN(d[k])) issues.push(`${lab} — no value entered`);
+      else if(d[k]>DEPTH_MAX[k]) issues.push(`${lab} ${d[k]} cm — over ${DEPTH_MAX[k]} cm`);
+    });
+    if(issues.length) confirmModal({icon:'dang', title:'Check these depths', issues, ok:'Continue anyway', okStyle:'dang', back:'Go back and fix', onOk:advance});
+    else advance();
+  };
+  $('save').onclick=proceed; $('next').onclick=proceed;
+}
+
+/* --- Prism --- */
+function screenPrism(){
+  const pr=state.prism;
+  const t=(key,lab,val,edit)=>`<div class="tally"><button class="stepbtn" data-dec="${key}">−</button><div class="mid"><div class="t-lab">${lab}${edit?' ✎':''}</div><div class="t-val" id="pv-${key}">${val}</div></div><button class="stepbtn" data-inc="${key}">＋</button></div>`;
+  show(`
+    <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Prism data</span><button class="navlink" id="next">next →</button></div>
+    <p class="sub">Variable-radius cruise</p>
+    <div class="field mt14" style="display:flex;align-items:center;gap:12px;">
+      <label style="margin:0;min-width:60px;">BAF</label>
+      <select id="baf">${BAF_OPTIONS.map(o=>`<option ${o===pr.baf?'selected':''}>${o}</option>`).join('')}</select>
+    </div>
+    <div class="tallies">
+      ${t('hw','Hardwoods in',pr.hw)}${t('con','Conifers in',pr.con)}
+      ${t('snag','Snags in',pr.snag)}<div id="otherbox">${t('other',cats.otherIn,pr.other,true)}</div>
+    </div>
+    <div class="prismnote" id="pnote"></div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="toexport">Continue to export →</button>
+  `);
+  const upNote=()=>{$('pnote').innerHTML=`Basal area = count × BAF, computed on export.<br>e.g. conifers ${pr.con} × ${pr.baf} = <b>${pr.con*pr.baf} ft²/ac</b> → CPBA`;};
+  upNote();
+  $('baf').onchange=e=>{pr.baf=+e.target.value; upNote();};
+  const bind=()=>{
+    document.querySelectorAll('#app [data-inc]').forEach(b=>b.onclick=()=>{const k=b.dataset.inc;pr[k]++;$('pv-'+k).textContent=pr[k];upNote();});
+    document.querySelectorAll('#app [data-dec]').forEach(b=>b.onclick=()=>{const k=b.dataset.dec;if(pr[k]>0)pr[k]--;$('pv-'+k).textContent=pr[k];upNote();});
+  };
+  bind();
+  // rename "Other in"
+  let timer=null,held=false; const ob=$('otherbox');
+  ob.addEventListener('touchstart',()=>{held=false;timer=setTimeout(()=>{held=true;renamePrompt(cats.otherIn,'Prism "Other" label',v=>{cats.otherIn=v.trim()||'Other in';saveCats();screenPrism();});},550);},{passive:true});
+  ob.addEventListener('touchend',()=>clearTimeout(timer));
+  $('back').onclick=()=>{state.idx=state.seq.length-1;renderSeq();};
+  $('next').onclick=screenExport; $('toexport').onclick=screenExport;
+}
+
+/* --- Export / Add record --- */
+function screenExport(){
+  const m=state.meta;
+  const nPts=state.points.filter(p=>p.cover!=null).length;
+  const nDep=state.depths.filter(d=>d.fbd!=null||d.litter!=null||d.duff!=null).length;
+  const rowPreview=buildRow();
+  show(`
+    <div class="navbar"><button class="navlink" id="back">← prism</button><span class="ctx">Review + add record</span><span style="width:50px"></span></div>
+    <div class="summary mt10">
+      <div class="r"><span>Site / plot</span><b>${m.site} / ${m.plot}</b></div>
+      <div class="r"><span>Observer / operator</span><b>${m.obs||'—'} / ${m.operator||'—'}</b></div>
+      <div class="r"><span>Date / time</span><b>${m.date} / ${m.time}</b></div>
+      <div class="r"><span>Points / depths</span><b>${nPts}/40 · ${nDep}/12</b></div>
+      <div class="r"><span>Prism (BAF ${state.prism.baf})</span><b>${state.prism.hw}/${state.prism.con}/${state.prism.snag}/${state.prism.other}</b></div>
+    </div>
+    <div class="filebar ${fileName?'':'warn'} mt14"><p class="lab">Appending to</p><p class="nm">${fileName||'no file selected'}</p></div>
+    <p class="foot" style="text-align:left;margin-top:14px;">CSV row preview</p>
+    <div class="csvbox">${HEADER.join(',')}\n${rowPreview}</div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="add"><span>＋</span> Add record</button>
+    <button class="btn ghost mt8" id="another">Start another plot</button>
+  `);
+  $('back').onclick=screenPrism;
+  $('add').onclick=async()=>{
+    if(!fileName){toast('No file selected');return;}
+    const dup=await fileHasDuplicate();
+    const doAdd=async()=>{ const ok=await addRecord(); if(ok){ toast('Record added to '+fileName); recordAddedScreen(); } };
+    if(dup){ confirmModal({icon:'warn',title:'Possible duplicate',body:`A record for ${m.site}/${m.plot} on ${m.date} is already in this file. Add another?`,ok:'Add anyway',okStyle:'warn',onOk:doAdd}); }
+    else doAdd();
+  };
+  $('another').onclick=startAnotherPlot;
+}
+function recordAddedScreen(){
+  show(`
+    <div class="spacer"></div>
+    <div style="text-align:center;">
+      <div class="modal" style="margin:0 auto;box-shadow:none;">
+        <div class="ic" style="background:var(--green-bg);color:var(--green);">✓</div>
+        <h3>Record added</h3>
+        <p>Saved to ${fileName}</p>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn go" id="another">Start another plot</button>
+    <button class="btn ghost mt10" id="project">Back to project</button>
+  `);
+  $('another').onclick=startAnotherPlot;
+  $('project').onclick=()=>{ const site=state.meta.site; state=newSession(); state.meta.site=site; screenProject(); };
+}
+function startAnotherPlot(){ const site=state.meta.site; state=newSession(); state.meta.site=site; screenPlotStart(); }
+
+/* ---------- modals ---------- */
+function confirmModal({icon,title,body,issues,ok,okStyle,back,onOk}){
+  overlay.innerHTML=`<div class="modal-bg"><div class="modal">
+    <div class="ic ${icon}">${icon==='dang'?'!':'⚠'}</div>
+    <h3>${title}</h3>
+    ${issues?`<div class="issues">${issues.map(i=>`<div>${i}</div>`).join('')}</div>`:`<p>${body||''}</p>`}
+    <button class="btn ghost" id="m-back">${back||'Go back'}</button>
+    <button class="btn ${okStyle==='dang'?'':'primary'} mt8" id="m-ok" style="${okStyle==='dang'?'background:var(--red);border-color:var(--red);color:#fff;':okStyle==='warn'?'background:var(--gold-fill);border-color:var(--gold-fill);color:#fff;':''}">${ok}</button>
+  </div></div>`;
+  $('m-back').onclick=clearOverlay;
+  $('m-ok').onclick=()=>{clearOverlay(); onOk&&onOk();};
+}
+function renamePrompt(current, title, onSave){
+  overlay.innerHTML=`<div class="modal-bg"><div class="modal rename">
+    <h3>${title}</h3>
+    <input id="rn" maxlength="24" value="${(current||'').replace(/"/g,'&quot;')}" placeholder="Category name"/>
+    <button class="btn ghost" id="rn-cancel">Cancel</button>
+    <button class="btn primary mt8" id="rn-save">Save name</button>
+  </div></div>`;
+  const el=$('rn'); el.focus();
+  $('rn-cancel').onclick=clearOverlay;
+  $('rn-save').onclick=()=>{const v=el.value;clearOverlay();onSave(v);};
+}
+
+/* ---------- swipe ---------- */
+function enableSwipe(el,onLeft,onRight){
+  let x0=null,y0=null;
+  el.ontouchstart=e=>{const tg=e.target;if(tg.closest('button,input,select,.chip')){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;};
+  el.ontouchend=e=>{if(x0==null)return;const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;if(Math.abs(dx)>60&&Math.abs(dy)<45){dx<0?onLeft():onRight();}x0=null;};
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  state=newSession();
+  if(supportsFS){ try{ const h=await idbGet('fileHandle'); if(h){ fileHandle=h; fileName=h.name; } }catch(e){} }
+  else if(localStorage.getItem('intelimon_fallback_header')){ fileName='intelimon.csv'; }
+  screenProject();
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
+}
+boot();
+</script>
+</body>
+</html>
