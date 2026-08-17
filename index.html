@@ -77,6 +77,21 @@
   .modal .issues{text-align:left; background:var(--surface2); border-radius:8px; padding:10px 12px; margin:0 0 16px;} .modal .issues div{font-size:13px; color:var(--red); padding:2px 0;}
   .rename input{margin:6px 0 16px;}
   .toast{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:24px; font-size:14px; font-weight:600; z-index:60; max-width:88%; text-align:center;}
+  textarea{width:100%; font-size:15px; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); font-family:inherit; resize:none;}
+  .noteblock{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:7px 9px;}
+  .noteblock label{font-size:11px; margin:0 0 3px;}
+  .noteblock input{height:36px; font-size:14px; letter-spacing:0; font-weight:400; text-transform:none;}
+  .dbhnote{font-size:12px; color:var(--gold); background:var(--gold-bg); border-radius:8px; padding:8px 10px; text-align:center; margin:0 0 10px;}
+  .over-head{display:grid; grid-template-columns:2.3fr 2.2fr 1fr; gap:5px; font-size:10px; color:var(--muted); margin-bottom:4px;}
+  .over-scroll{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;}
+  .over-row{display:grid; grid-template-columns:2.3fr 2.2fr 1fr; gap:5px; margin-bottom:5px;}
+  .over-row input,.over-row select{height:38px; font-size:13px; padding:0 8px; letter-spacing:0; font-weight:400; text-transform:none;}
+  .over-row .sp{text-transform:uppercase;}
+  .catmgr{text-align:left; max-height:60vh; overflow-y:auto;}
+  .catrow{display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:0.5px solid var(--line);}
+  .catrow .g{font-size:10px; color:var(--muted); min-width:64px;}
+  .catrow .nm{flex:1; font-size:14px; font-weight:600;} .catrow .nm.empty{color:var(--muted); font-weight:400; font-style:italic;}
+  .catrow button{border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; min-height:0; width:auto;}
 </style>
 </head>
 <body>
@@ -109,8 +124,12 @@ const HEADER = [
   'grass','forbs','woody','fine_lit','decid_lit','SNLIT','LNLIT','BG','cat9','cat10',
   'fuel_1hr','fuel_10hr','fuel_100hr','fuel_1000hr',
   'BAF','HWPBA','CPBA','SPBA','OPBA','HW_in','CON_in','SNAG_in','OTH_in',
-  'MFBD','MLD','MDD'
+  'MFBD','MLD','MDD','notes'
 ];
+const QUADS = ['NW','NE','SE','SW'];
+const STATUS_OPTIONS = ['','Live','Snag','Scorched','Insect damage','Catface scar'];
+const OVERSTORY_ROWS = 25;
+const OVERSTORY_HEADER = ['site','plot','date','quadrant','species','status','count'];
 
 /* ---------- category label persistence ---------- */
 function loadCats(){ try{const s=JSON.parse(localStorage.getItem('intelimon_cats')); if(s&&Array.isArray(s.cover)&&s.cover.length===10)return s;}catch(e){} return {cover:COVER_DEFAULTS.map(c=>c.label), otherIn:'Other in'}; }
@@ -141,13 +160,14 @@ function newSession(){
       if(DEPTH_DISTS.includes(dist)){ dep.push({transect:tr, dist, fbd:null, litter:null, duff:null, _i:di}); seq.push({type:'depth', i:di}); di++; }
     }
   });
-  return {meta:{site:'', plot:'', obs:'', operator:'', date:'', time:''}, points:pts, depths:dep, seq, idx:0, fuel:{oneHr:0,tenHr:0,hundredHr:0,thousandHr:0}, prism:{baf:10,hw:0,con:0,snag:0,other:0}};
+  return {meta:{site:'', plot:'', obs:'', operator:'', date:'', time:'', notes:''}, points:pts, depths:dep, seq, idx:0, fuel:{oneHr:0,tenHr:0,hundredHr:0,thousandHr:0}, prism:{baf:10,hw:0,con:0,snag:0,other:0}, overstoryPages:[]};
 }
 
 /* ---------- helpers ---------- */
 const $=(id)=>document.getElementById(id);
 const root=$('root'), overlay=$('overlay');
 function esc(s){s=String(s==null?'':s); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function he(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
 function nowParts(){const n=new Date();const p=x=>String(x).padStart(2,'0');return {date:`${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}`, time:`${p(n.getHours())}${p(n.getMinutes())}`};}
 function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
 function clearOverlay(){overlay.innerHTML='';}
@@ -163,11 +183,22 @@ function buildRow(){
     ct.grass,ct.forbs,ct.woody,ct.fine_lit,ct.decid_lit,ct.SNLIT,ct.LNLIT,ct.BG,ct.cat9,ct.cat10,
     f.oneHr,f.tenHr,f.hundredHr,f.thousandHr,
     pr.baf, pr.hw*pr.baf, pr.con*pr.baf, pr.snag*pr.baf, pr.other*pr.baf, pr.hw,pr.con,pr.snag,pr.other,
-    depthMean('fbd'),depthMean('litter'),depthMean('duff')].map(esc).join(',');
+    depthMean('fbd'),depthMean('litter'),depthMean('duff'), m.notes].map(esc).join(',');
 }
 function addRecord(){const r=loadRecords(); r.push(buildRow()); saveRecords(r); return true;}
 function hasDuplicate(){const m=state.meta; return loadRecords().some(l=>{const c=l.split(',');return c[0]===m.site&&c[1]===m.plot&&c[3]===m.date;});}
 function exportCSV(){const r=loadRecords(); downloadText(HEADER.join(',')+'\n'+r.join('\n')+(r.length?'\n':''), fileName||'intelimon.csv'); }
+
+/* ---------- overstory store (separate SITE_overstory.csv) ---------- */
+function loadOver(){ try{return JSON.parse(localStorage.getItem('intelimon_overstory')||'[]');}catch(e){return [];} }
+function saveOver(r){ localStorage.setItem('intelimon_overstory', JSON.stringify(r)); }
+function overCount(){ return loadOver().length; }
+function commitOverstory(){
+  const m=state.meta, store=loadOver();
+  (state.overstoryPages||[]).forEach(pg=>{ (pg.rows||[]).forEach(r=>{ if(r.sp && r.sp.trim()){ store.push([m.site,m.plot,m.date,pg.quad,r.sp.trim(),r.st||'',r.ct||''].map(esc).join(',')); } }); });
+  saveOver(store);
+}
+function exportOverstory(){ const r=loadOver(); const site=(state&&state.meta.site)||'intelimon'; downloadText(OVERSTORY_HEADER.join(',')+'\n'+r.join('\n')+(r.length?'\n':''), `${site}_overstory.csv`); }
 
 /* ---------- import an existing CSV back into the store ---------- */
 function importCSV(text, name){
@@ -195,13 +226,14 @@ function screenProject(){
     <img class="logo" src="./logo.png" alt="IntELiMon logo"/>
     <h1>IntELiMon Plot Data App</h1>
     <p class="sub">Create or pick a file and collect plot data</p>
-    <div class="field mt14"><label>Site code (5 characters)</label><input id="site" class="code" maxlength="5" value="${state?state.meta.site:''}"/></div>
+    <div class="field mt14"><label>Site code (5 characters)</label><input id="site" class="code" maxlength="5" value="${state?state.meta.site:''}"/>${(state&&state.meta.site)?'<p class="foot" style="text-align:left;margin-top:4px;">Pre-filled with your last site code · edit to change</p>':''}</div>
     <button class="btn mt8" id="newf"><span>＋</span> New file</button>
     <button class="btn mt10" id="openf"><span>📂</span> Open existing</button>
     ${pendingResume?`<button class="btn primary mt10" id="resume">↩ Resume plot in progress (${(pendingResume.meta&&pendingResume.meta.plot)||''})</button><button class="btn ghost mt8" id="discard">Discard in-progress plot</button>`:''}
     <div class="spacer"></div>
     ${fileName?`<div class="filebar"><p class="lab">Current file</p><p class="nm">${fileName}</p><p class="meta">${rc} record(s) saved on this device</p></div>`:`<div class="filebar warn"><p class="nm">No file yet</p><p class="meta">Create a new file or open an existing one.</p></div>`}
     ${rc?`<button class="btn mt10" id="dl">⬇ Download CSV (${rc})</button>`:''}
+    ${overCount()?`<button class="btn mt8" id="dlover">⬇ Download overstory CSV (${overCount()})</button>`:''}
     <button class="btn primary mt14" id="tonew">Start a plot →</button>
     ${deferredPrompt?'<button class="btn mt10" id="installbtn">⬇ Install app to home screen</button>':(isStandalone()?'':'<p class="foot">Not installed yet? In Chrome tap ⋮ → “Install app”.</p>')}
     <p class="foot">Records are saved on this device as you add them. Download the CSV to get the file out; import it later with “Open existing” to keep adding.</p>
@@ -219,6 +251,7 @@ function screenProject(){
   if($('resume')) $('resume').onclick=()=>{ state=pendingResume; pendingResume=null; renderSeq(); };
   if($('discard')) $('discard').onclick=()=>{ clearSession(); pendingResume=null; screenProject(); };
   if($('dl')) $('dl').onclick=exportCSV;
+  if($('dlover')) $('dlover').onclick=exportOverstory;
   const ib=$('installbtn'); if(ib) ib.onclick=async()=>{ if(!deferredPrompt)return; deferredPrompt.prompt(); try{await deferredPrompt.userChoice;}catch(e){} deferredPrompt=null; screenProject(); };
   $('tonew').onclick=()=>{
     const site=siteEl.value.trim().toUpperCase(); if(!site){toast('Enter a site code');return;}
@@ -238,11 +271,14 @@ function screenPlotStart(){
       <div class="field"><label>Operator 1 initials</label><input id="obs" class="code" maxlength="4" value="${state.meta.obs}"/></div>
       <div class="field"><label>Operator 2 initials</label><input id="oper" class="code" maxlength="4" value="${state.meta.operator}"/></div>
     </div>
+    <button class="btn" id="mgcats">✎ Manage categories</button>
+    <p class="foot">Rename or clear any of the 10 cover labels, anytime</p>
     <div class="spacer"></div>
     <button class="btn go" id="scan">▶ Scan started</button>
     <p class="foot">Logs date (YYYYMMDD) + time (HHMM) when pressed</p>
   `);
   $('back').onclick=screenProject;
+  $('mgcats').onclick=manageCategories;
   $('scan').onclick=()=>{
     const plot=$('plot').value.trim().toUpperCase(); if(!plot){toast('Enter a plot name');return;}
     state.meta.plot=plot; state.meta.obs=$('obs').value.trim().toUpperCase(); state.meta.operator=$('oper').value.trim().toUpperCase();
@@ -265,8 +301,11 @@ function screenPoint(p){
   show(`
     <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Point ${pointNo} / 40 · ${arm} ${p.dist}m</span><button class="navlink" id="next">next →</button></div>
     <div id="covers">${chipsHtml}</div>
-    <div class="tallywrap"><p class="cap">Time-lag fuel tally (running)</p><div class="tallies">${tally('oneHr','1-hr',f.oneHr)}${tally('tenHr','10-hr',f.tenHr)}${tally('hundredHr','100-hr',f.hundredHr)}${tally('thousandHr','1000-hr',f.thousandHr)}</div></div>
+    <div class="tallywrap">
+      <div class="noteblock" style="margin-bottom:8px"><label>Notes (plot-wide)</label><input id="note" value="${he(state.meta.notes)}" placeholder="Flag anomalies or observations…"/></div>
+      <p class="cap">Time-lag fuel tally (running)</p><div class="tallies">${tally('oneHr','1-hr',f.oneHr)}${tally('tenHr','10-hr',f.tenHr)}${tally('hundredHr','100-hr',f.hundredHr)}${tally('thousandHr','1000-hr',f.thousandHr)}</div></div>
   `);
+  const noteEl=$('note'); if(noteEl) noteEl.addEventListener('input',e=>{state.meta.notes=e.target.value; saveSession();});
   document.querySelectorAll('#covers .chip').forEach(el=>{
     const i=+el.dataset.i; let timer=null, held=false;
     el.addEventListener('touchstart',()=>{held=false; timer=setTimeout(()=>{held=true; renameCover(i);},550);},{passive:true});
@@ -288,8 +327,10 @@ function screenDepth(d){
     <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Depth · ${arm} ${d.dist}m</span><button class="navlink" id="next">next →</button></div>
     <div class="alertbar"><b>⚠ Take depth measurements here</b></div>
     ${inp('fbd','Fuel bed depth',d.fbd)}${inp('litter','Litter depth',d.litter)}${inp('duff','Duff depth',d.duff)}
+    <div class="noteblock"><label>Notes (plot-wide)</label><textarea id="note" rows="2" placeholder="Flag anomalies or observations…">${he(state.meta.notes)}</textarea></div>
     <div class="spacer"></div><button class="btn primary" id="save">Save + continue</button>
   `);
+  const noteEl=$('note'); if(noteEl) noteEl.addEventListener('input',e=>{state.meta.notes=e.target.value; saveSession();});
   const read=()=>{['fbd','litter','duff'].forEach(k=>{const v=$('d-'+k).value.trim(); d[k]=v===''?null:parseFloat(v);}); saveSession();};
   backAction=()=>{read();goBack();};
   $('back').onclick=backAction;
@@ -360,14 +401,62 @@ function recordAddedScreen(){
     <div class="modal" style="margin:0 auto;"><div class="ic ok">✓</div><h3>Record added</h3><p>${rc} record(s) saved in ${fileName}</p></div>
     <div class="spacer"></div>
     <button class="btn primary" id="dl">⬇ Download CSV (${rc})</button>
-    <button class="btn go mt10" id="another">Start another plot</button>
+    <button class="btn go mt10" id="overstory">🌲 Collect overstory data</button>
+    <button class="btn mt10" id="another">Start another plot</button>
     <button class="btn ghost mt10" id="project">Back to project</button>
   `);
   $('dl').onclick=exportCSV;
+  $('overstory').onclick=()=>screenOverstory(0);
   $('another').onclick=startAnotherPlot;
   $('project').onclick=()=>{ const s=state.meta.site; state=newSession(); state.meta.site=s; screenProject(); };
 }
 function startAnotherPlot(){ const s=state.meta.site; state=newSession(); state.meta.site=s; clearSession(); screenPlotStart(); }
+
+/* ---------- overstory ---------- */
+function screenOverstory(qi){
+  if(!state.overstoryPages) state.overstoryPages=[];
+  if(!state.overstoryPages[qi]) state.overstoryPages[qi]={quad:QUADS[qi], rows:Array.from({length:OVERSTORY_ROWS},()=>({sp:'',st:'',ct:''}))};
+  const page=state.overstoryPages[qi];
+  const readOver=()=>{ const q=$('quad'); if(q)page.quad=q.value; page.rows.forEach((r,idx)=>{ const sp=root.querySelector('[data-sp="'+idx+'"]'), st=root.querySelector('[data-st="'+idx+'"]'), ct=root.querySelector('[data-ct="'+idx+'"]'); if(sp)r.sp=sp.value; if(st)r.st=(st.value==='—'?'':st.value); if(ct)r.ct=ct.value.trim(); }); };
+  backAction = qi>0 ? ()=>{readOver(); screenOverstory(qi-1);} : ()=>{readOver(); recordAddedScreen();};
+  const statusSel=(sel)=>STATUS_OPTIONS.map(o=>`<option ${o===sel?'selected':''}>${o||'—'}</option>`).join('');
+  const rowsHtml=page.rows.map((r,idx)=>`<div class="over-row"><input class="sp" data-sp="${idx}" value="${he(r.sp)}" placeholder="${idx<3?'code':'—'}"/><select data-st="${idx}">${statusSel(r.st)}</select><input data-ct="${idx}" inputmode="numeric" value="${he(r.ct)}"/></div>`).join('');
+  show(`
+    <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Overstory · quadrant ${qi+1} / 4</span>${qi<3?'<button class="navlink" id="next">next →</button>':'<span style="width:44px"></span>'}</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><label style="margin:0;min-width:58px;">Quadrant</label><select id="quad">${QUADS.map(q=>`<option ${q===page.quad?'selected':''}>${q}</option>`).join('')}</select></div>
+    <p class="dbhnote">Number of individuals with DBH &gt; 4 inches by species</p>
+    <div class="over-head"><span>Species code</span><span>Status (optional)</span><span style="text-align:center">Count</span></div>
+    <div class="over-scroll">${rowsHtml}</div>
+    <button class="btn primary mt10" id="cont">${qi<3?'Next quadrant →':'Finish overstory'}</button>
+  `);
+  $('back').onclick=backAction;
+  const go=()=>{ readOver(); if(qi<3)screenOverstory(qi+1); else { commitOverstory(); state.overstoryPages=[]; overstoryDone(); } };
+  $('cont').onclick=go; if($('next'))$('next').onclick=go;
+}
+function overstoryDone(){
+  backAction=null;
+  const oc=overCount();
+  show(`
+    <div class="spacer"></div>
+    <div class="modal" style="margin:0 auto;"><div class="ic ok">✓</div><h3>Overstory saved</h3><p>${oc} species row(s) in ${state.meta.site}_overstory.csv</p></div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="dl">⬇ Download overstory CSV (${oc})</button>
+    <button class="btn go mt10" id="another">Start another plot</button>
+    <button class="btn ghost mt10" id="project">Back to project</button>
+  `);
+  $('dl').onclick=exportOverstory;
+  $('another').onclick=startAnotherPlot;
+  $('project').onclick=()=>{ const s=state.meta.site; state=newSession(); state.meta.site=s; screenProject(); };
+}
+
+/* ---------- category manager ---------- */
+function manageCategories(){
+  const rows=cats.cover.map((lbl,i)=>`<div class="catrow"><span class="g">${COVER_DEFAULTS[i].group}</span><span class="nm ${lbl?'':'empty'}">${lbl?he(lbl):'(blank)'}</span><button data-edit="${i}">Edit</button>${lbl?`<button data-clear="${i}">Clear</button>`:''}</div>`).join('');
+  overlay.innerHTML=`<div class="modal-bg"><div class="modal"><h3>Cover categories</h3><div class="catmgr">${rows}</div><button class="btn primary mt14" id="cm-done">Done</button></div></div>`;
+  overlay.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const i=+b.dataset.edit; renamePrompt(cats.cover[i]||'', COVER_DEFAULTS[i].group+' slot', v=>{cats.cover[i]=v.trim(); saveCats(); manageCategories();});});
+  overlay.querySelectorAll('[data-clear]').forEach(b=>b.onclick=()=>{const i=+b.dataset.clear; cats.cover[i]=''; saveCats(); manageCategories();});
+  $('cm-done').onclick=clearOverlay;
+}
 
 /* ---------- modals ---------- */
 function confirmModal({icon,title,body,issues,ok,okStyle,back,onOk}){
