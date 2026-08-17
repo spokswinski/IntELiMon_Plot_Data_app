@@ -25,7 +25,7 @@
     overscroll-behavior:none;
   }
   #app{max-width:520px; margin:0 auto; min-height:100%; display:flex; flex-direction:column;}
-  .screen{flex:1; display:flex; flex-direction:column; padding:14px 14px calc(14px + env(safe-area-inset-bottom)); min-height:100vh; touch-action:pan-y;}
+  .screen{flex:1; display:flex; flex-direction:column; padding:14px 14px calc(14px + env(safe-area-inset-bottom)); min-height:100vh; min-height:100dvh; touch-action:pan-y;}
   h1{font-size:20px; font-weight:700; margin:0; text-align:center;}
   .sub{font-size:12px; color:var(--muted); text-align:center; margin:2px 0 0;}
   label{font-size:13px; color:var(--muted); display:block; margin:0 0 4px;}
@@ -301,9 +301,10 @@ function screenPoint(p){
   show(`
     <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Point ${pointNo} / 40 · ${arm} ${p.dist}m</span><button class="navlink" id="next">next →</button></div>
     <div id="covers">${chipsHtml}</div>
-    <div class="tallywrap">
-      <div class="noteblock" style="margin-bottom:8px"><label>Notes (plot-wide)</label><input id="note" value="${he(state.meta.notes)}" placeholder="Flag anomalies or observations…"/></div>
+    <div class="noteblock" style="margin:12px 0;"><label>Notes (plot-wide)</label><input id="note" value="${he(state.meta.notes)}" placeholder="Flag anomalies or observations…"/></div>
+    <div class="tallywrap" style="margin-top:0">
       <p class="cap">Time-lag fuel tally (running)</p><div class="tallies">${tally('oneHr','1-hr',f.oneHr)}${tally('tenHr','10-hr',f.tenHr)}${tally('hundredHr','100-hr',f.hundredHr)}${tally('thousandHr','1000-hr',f.thousandHr)}</div></div>
+    <div class="spacer"></div>
   `);
   const noteEl=$('note'); if(noteEl) noteEl.addEventListener('input',e=>{state.meta.notes=e.target.value; saveSession();});
   document.querySelectorAll('#covers .chip').forEach(el=>{
