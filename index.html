@@ -47,7 +47,8 @@
   .filebar .meta{font-size:11px; color:var(--muted); margin:3px 0 0;}
   .filebar.warn{background:var(--gold-bg); border-color:#e3c78a;} .filebar.warn .nm{color:var(--gold);}
   .navbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; min-height:32px;}
-  .navbar .ctx{font-size:13px; font-weight:700;}
+  .navbar .ctx {font-size:13px; font-weight:700;}
+  .navbar .ctx .sub{display:block; font-size:11px; font-weight:600; color:var(--muted);}
   .navlink{font-size:14px; color:var(--muted); background:none; border:none; padding:6px 4px; cursor:pointer; font-weight:600;}
   .grouplab{font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--gold); margin:8px 0 5px;}
   .chips{display:grid; gap:6px;} .chips.c3{grid-template-columns:repeat(3,1fr);} .chips.c2{grid-template-columns:repeat(2,1fr);}
@@ -112,6 +113,9 @@ const COVER_DEFAULTS = [
   {slug:'grass',     label:'Grass',              group:'Live fuel'},
   {slug:'forbs',     label:'Forbs',              group:'Live fuel'},
   {slug:'woody',     label:'Woody',              group:'Live fuel'},
+  {slug:'cat11',     label:'',                   group:'Live fuel'},
+  {slug:'cat12',     label:'',                   group:'Live fuel'},
+  {slug:'cat13',     label:'',                   group:'Live fuel'},
   {slug:'fine_lit',  label:'Fine Litter',        group:'Litter'},
   {slug:'decid_lit', label:'Deciduous Litter',   group:'Litter'},
   {slug:'SNLIT',     label:'Short Needle Litter', group:'Litter'},
@@ -126,7 +130,7 @@ const DEPTH_MAX = {fbd:140, litter:20, duff:10};
 const BAF_OPTIONS = [5,10,20,25,30,40];
 const HEADER = [
   'site','plot','op1','date','time','op2',
-  'grass','forbs','woody','fine_lit','decid_lit','SNLIT','LNLIT','BG','cat9','cat10',
+  'grass','forbs','woody','cat11','cat12','cat13','fine_lit','decid_lit','SNLIT','LNLIT','BG','cat9','cat10',
   'fuel_1hr','fuel_10hr','fuel_100hr','fuel_1000hr',
   'BAF','HWPBA','CPBA','SPBA','OPBA','HW_in','CON_in','SNAG_in','OTH_in',
   'MFBD','MLD','MDD','notes'
@@ -138,7 +142,7 @@ const OVERSTORY_HEADER = ['site','plot','date','quadrant','species','status','co
 const HEADER_FLAT = ['site','plot','op1','date','time','op2','category','variable','value'];
 
 /* ---------- category label persistence ---------- */
-function loadCats(){ try{const s=JSON.parse(localStorage.getItem('intelimon_cats')); if(s&&Array.isArray(s.cover)&&s.cover.length===10)return s;}catch(e){} return {cover:COVER_DEFAULTS.map(c=>c.label), otherIn:'Other in'}; }
+function loadCats(){ try{const s=JSON.parse(localStorage.getItem('intelimon_cats')); if(s&&Array.isArray(s.cover)&&s.cover.length===COVER_DEFAULTS.length)return s;}catch(e){} return {cover:COVER_DEFAULTS.map(c=>c.label), otherIn:'Other in'}; }
 function saveCats(){ localStorage.setItem('intelimon_cats', JSON.stringify(cats)); }
 let cats = loadCats();
 
@@ -191,7 +195,7 @@ function depthMean(k){const v=state.depths.map(d=>d[k]).filter(x=>x!=null&&x!=='
 function buildRow(){
   const m=state.meta, f=state.fuel, pr=state.prism, ct=coverTotals();
   return [m.site,m.plot,m.obs,m.date,m.time,m.operator,
-    ct.grass,ct.forbs,ct.woody,ct.fine_lit,ct.decid_lit,ct.SNLIT,ct.LNLIT,ct.BG,ct.cat9,ct.cat10,
+    ct.grass,ct.forbs,ct.woody,ct.cat11,ct.cat12,ct.cat13,ct.fine_lit,ct.decid_lit,ct.SNLIT,ct.LNLIT,ct.BG,ct.cat9,ct.cat10,
     f.oneHr,f.tenHr,f.hundredHr,f.thousandHr,
     pr.baf, pr.hw*pr.baf, pr.con*pr.baf, pr.snag*pr.baf, pr.other*pr.baf, pr.hw,pr.con,pr.snag,pr.other,
     depthMean('fbd'),depthMean('litter'),depthMean('duff'), m.notes].map(esc).join(',');
@@ -323,13 +327,13 @@ function goBack(){ if(state.idx>0){state.idx--; renderSeq();} else screenPlotSta
 function screenPoint(p){
   backAction=goBack;
   const pointNo=p._i+1, arm=p.transect==='NS'?'N→S':'W→E';
-  const groups=[['Live fuel','c3',[0,1,2]],['Litter','c2',[3,4,5,6]],['Other','c3',[7,8,9]]];
+  const groups=[['Live fuel','c3',[0,1,2,3,4,5]],['Litter','c2',[6,7,8,9]],['Other','c3',[10,11,12]]];
   let chipsHtml='';
   groups.forEach(([g,cls,idxs])=>{ chipsHtml+=`<div class="grouplab">${g}</div><div class="chips ${cls}">`; idxs.forEach(i=>{const lbl=cats.cover[i], blank=!lbl; chipsHtml+=`<div class="chip ${p.covers.includes(i)?'sel':''} ${blank?'blank':''}" data-i="${i}">${blank?'＋ add':lbl}<span class="ed">✎</span></div>`;}); chipsHtml+='</div>'; });
   const f=state.fuel;
   const tally=(k,lab,v)=>`<div class="tally"><button class="stepbtn" data-dec="${k}">−</button><div class="mid"><div class="t-lab">${lab}</div><div class="t-val" id="tv-${k}">${v}</div></div><button class="stepbtn" data-inc="${k}">＋</button></div>`;
   show(`
-    <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Point ${pointNo} / 40 · ${arm} ${p.dist}m</span><button class="navlink" id="next">next →</button></div>
+    <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">${arm} ${p.dist}m<span class="sub">Point ${pointNo} / 40</span></span><button class="navlink" id="next">next →</button></div>
     <div id="covers">${chipsHtml}</div>
     <div class="noteblock" style="margin:12px 0;"><label>Notes (plot-wide)</label><input id="note" value="${he(state.meta.notes)}" placeholder="Flag anomalies or observations…"/></div>
     <div class="tallywrap" style="margin-top:0">
