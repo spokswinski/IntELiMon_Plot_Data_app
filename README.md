@@ -43,7 +43,7 @@ device — long-press a category on a point screen, or use **Manage categories**
 
 ---
 
-## Host it (one-time, ~5 min)
+## Host it (If you want to fork this and build your own template)
 
 The app must be served over HTTPS once so it can install and cache for offline use.
 GitHub Pages is the easy path:
