@@ -92,6 +92,11 @@
   .catrow .g{font-size:10px; color:var(--muted); min-width:64px;}
   .catrow .nm{flex:1; font-size:14px; font-weight:600;} .catrow .nm.empty{color:var(--muted); font-weight:400; font-style:italic;}
   .catrow button{border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; min-height:0; width:auto;}
+  .fmtlabel{font-size:12px; color:var(--muted); margin:0 0 5px;}
+  .seg{display:grid; grid-template-columns:1fr 1fr; gap:6px;}
+  .segbtn{min-height:44px; border:1px solid var(--line); background:var(--surface); border-radius:10px; font-size:13px; font-weight:600; color:var(--ink); cursor:pointer; padding:6px 4px;}
+  .segbtn.on{background:var(--sel); border-color:var(--sel); color:#fff;}
+  .seg.locked .segbtn{opacity:.5; cursor:default;}
 </style>
 </head>
 <body>
@@ -130,6 +135,7 @@ const QUADS = ['NW','NE','SE','SW'];
 const STATUS_OPTIONS = ['','Live','Snag','Scorched','Insect damage','Catface scar'];
 const OVERSTORY_ROWS = 25;
 const OVERSTORY_HEADER = ['site','plot','date','quadrant','species','status','count'];
+const HEADER_FLAT = ['site','plot','op1','date','time','op2','category','variable','value'];
 
 /* ---------- category label persistence ---------- */
 function loadCats(){ try{const s=JSON.parse(localStorage.getItem('intelimon_cats')); if(s&&Array.isArray(s.cover)&&s.cover.length===10)return s;}catch(e){} return {cover:COVER_DEFAULTS.map(c=>c.label), otherIn:'Other in'}; }
@@ -142,6 +148,11 @@ function saveRecords(r){ localStorage.setItem('intelimon_records', JSON.stringif
 function recordCount(){ return loadRecords().length; }
 let fileName = localStorage.getItem('intelimon_filename') || null;
 function setFileName(n){ fileName=n; localStorage.setItem('intelimon_filename', n); }
+let format = localStorage.getItem('intelimon_format') || 'wide';
+function setFormat(f){ format=f; localStorage.setItem('intelimon_format', f); }
+function activeHeader(){ return format==='flat'?HEADER_FLAT:HEADER; }
+function detectFormat(cols){ return cols.indexOf('variable')>=0?'flat':'wide'; }
+function plotCount(){ const s=new Set(); loadRecords().forEach(l=>{const c=l.split(','); if(c.length>3)s.add(c[0]+'|'+c[1]+'|'+c[3]);}); return s.size; }
 
 /* ---------- in-progress session autosave (crash / swipe safety) ---------- */
 function saveSession(){ if(state) localStorage.setItem('intelimon_session', JSON.stringify(state)); }
@@ -185,9 +196,22 @@ function buildRow(){
     pr.baf, pr.hw*pr.baf, pr.con*pr.baf, pr.snag*pr.baf, pr.other*pr.baf, pr.hw,pr.con,pr.snag,pr.other,
     depthMean('fbd'),depthMean('litter'),depthMean('duff'), m.notes].map(esc).join(',');
 }
-function addRecord(){const r=loadRecords(); r.push(buildRow()); saveRecords(r); return true;}
+function buildRowsFlat(){
+  const m=state.meta,f=state.fuel,pr=state.prism,ct=coverTotals();
+  const id=[m.site,m.plot,m.obs,m.date,m.time,m.operator], out=[];
+  const push=(cat,vn,val)=>out.push(id.concat([cat,vn,val]).map(esc).join(','));
+  COVER_DEFAULTS.forEach(c=>push('cover',c.slug,ct[c.slug]));
+  push('fuel','fuel_1hr',f.oneHr);push('fuel','fuel_10hr',f.tenHr);push('fuel','fuel_100hr',f.hundredHr);push('fuel','fuel_1000hr',f.thousandHr);
+  push('prism','BAF',pr.baf);push('prism','HWPBA',pr.hw*pr.baf);push('prism','CPBA',pr.con*pr.baf);push('prism','SPBA',pr.snag*pr.baf);push('prism','OPBA',pr.other*pr.baf);
+  push('prism','HW_in',pr.hw);push('prism','CON_in',pr.con);push('prism','SNAG_in',pr.snag);push('prism','OTH_in',pr.other);
+  push('depth','MFBD',depthMean('fbd'));push('depth','MLD',depthMean('litter'));push('depth','MDD',depthMean('duff'));
+  push('meta','notes',m.notes);
+  return out;
+}
+function buildRows(){ return format==='flat'?buildRowsFlat():[buildRow()]; }
+function addRecord(){const r=loadRecords(); buildRows().forEach(x=>r.push(x)); saveRecords(r); return true;}
 function hasDuplicate(){const m=state.meta; return loadRecords().some(l=>{const c=l.split(',');return c[0]===m.site&&c[1]===m.plot&&c[3]===m.date;});}
-function exportCSV(){const r=loadRecords(); downloadText(HEADER.join(',')+'\n'+r.join('\n')+(r.length?'\n':''), fileName||'intelimon.csv'); }
+function exportCSV(){const r=loadRecords(); downloadText(activeHeader().join(',')+'\n'+r.join('\n')+(r.length?'\n':''), fileName||'intelimon.csv'); }
 
 /* ---------- overstory store (separate SITE_overstory.csv) ---------- */
 function loadOver(){ try{return JSON.parse(localStorage.getItem('intelimon_overstory')||'[]');}catch(e){return [];} }
@@ -203,7 +227,7 @@ function exportOverstory(){ const r=loadOver(); const site=(state&&state.meta.si
 /* ---------- import an existing CSV back into the store ---------- */
 function importCSV(text, name){
   const lines=text.split(/\r?\n/).filter(l=>l.trim().length);
-  if(lines.length && lines[0].split(',')[0].replace(/^"|"$/g,'')==='site') lines.shift();
+  if(lines.length && lines[0].split(',')[0].replace(/^"|"$/g,'')==='site'){ setFormat(detectFormat(lines[0].split(','))); lines.shift(); }
   saveRecords(lines); setFileName(name.endsWith('.csv')?name:name+'.csv');
 }
 $('importer').addEventListener('change', function(){
@@ -221,17 +245,23 @@ function show(html){root.innerHTML=html;}
 
 function screenProject(){
   backAction=null;
-  const rc=recordCount();
+  const rc=plotCount(); const locked=!!fileName;
   show(`
     <img class="logo" src="./logo.png" alt="IntELiMon logo"/>
     <h1>IntELiMon Plot Data App</h1>
     <p class="sub">Create or pick a file and collect plot data</p>
     <div class="field mt14"><label>Site code (5 characters)</label><input id="site" class="code" maxlength="5" value="${state?state.meta.site:''}"/>${(state&&state.meta.site)?'<p class="foot" style="text-align:left;margin-top:4px;">Pre-filled with your last site code · edit to change</p>':''}</div>
-    <button class="btn mt8" id="newf"><span>＋</span> New file</button>
+    <p class="fmtlabel mt14">Output format</p>
+    <div class="seg ${locked?'locked':''}">
+      <button class="segbtn ${format==='wide'?'on':''}" data-fmt="wide" ${locked?'disabled':''}>Default data table</button>
+      <button class="segbtn ${format==='flat'?'on':''}" data-fmt="flat" ${locked?'disabled':''}>Flat format</button>
+    </div>
+    ${locked?`<p class="foot" style="text-align:left;margin-top:4px;">Locked to ${format==='flat'?'flat format':'default data table'} for this file · start a new file to change</p>`:''}
+    <button class="btn mt10" id="newf"><span>＋</span> New file</button>
     <button class="btn mt10" id="openf"><span>📂</span> Open existing</button>
     ${pendingResume?`<button class="btn primary mt10" id="resume">↩ Resume plot in progress (${(pendingResume.meta&&pendingResume.meta.plot)||''})</button><button class="btn ghost mt8" id="discard">Discard in-progress plot</button>`:''}
     <div class="spacer"></div>
-    ${fileName?`<div class="filebar"><p class="lab">Current file</p><p class="nm">${fileName}</p><p class="meta">${rc} record(s) saved on this device</p></div>`:`<div class="filebar warn"><p class="nm">No file yet</p><p class="meta">Create a new file or open an existing one.</p></div>`}
+    ${fileName?`<div class="filebar"><p class="lab">Current file</p><p class="nm">${fileName}</p><p class="meta">${rc} plot(s) · ${format==='flat'?'flat format':'data table'}</p></div>`:`<div class="filebar warn"><p class="nm">No file yet</p><p class="meta">Create a new file or open an existing one.</p></div>`}
     ${rc?`<button class="btn mt10" id="dl">⬇ Download CSV (${rc})</button>`:''}
     ${overCount()?`<button class="btn mt8" id="dlover">⬇ Download overstory CSV (${overCount()})</button>`:''}
     <button class="btn primary mt14" id="tonew">Start a plot →</button>
@@ -241,11 +271,11 @@ function screenProject(){
   const siteEl=$('site');
   const syncSite=()=>{const v=siteEl.value.toUpperCase(); if(state)state.meta.site=v; localStorage.setItem('intelimon_last_site',v);};
   siteEl.addEventListener('input',syncSite);
+  if(!locked) document.querySelectorAll('.segbtn').forEach(b=>b.onclick=()=>{ setFormat(b.dataset.fmt); screenProject(); });
   $('newf').onclick=()=>{
+    if(fileName){ confirmModal({icon:'warn',title:'Start a new file?',body:`This clears the ${plotCount()} plot(s) on this device and lets you pick a format. Download them first if you need them.`,ok:'Clear & choose format',okStyle:'warn',onOk:()=>{ saveRecords([]); localStorage.removeItem('intelimon_filename'); fileName=null; screenProject(); toast('Pick a format, then tap New file'); }}); return; }
     const site=siteEl.value.trim().toUpperCase(); if(!site){toast('Enter a site code first');return;}
-    const start=()=>{ setFileName(`${site}_${nowParts().date}.csv`); saveRecords([]); if(state)state.meta.site=site; screenProject(); toast('New file started'); };
-    if(recordCount()>0){ confirmModal({icon:'warn',title:'Start a new file?',body:`This clears the ${recordCount()} record(s) on this device. Download them first if you need them.`,ok:'Start new (clear)',okStyle:'warn',onOk:start}); }
-    else start();
+    setFileName(`${site}_${nowParts().date}.csv`); saveRecords([]); if(state)state.meta.site=site; screenProject(); toast(`New ${format==='flat'?'flat-format':'data-table'} file started`);
   };
   $('openf').onclick=()=>$('importer').click();
   if($('resume')) $('resume').onclick=()=>{ state=pendingResume; pendingResume=null; renderSeq(); };
@@ -367,9 +397,11 @@ function screenPrism(){
 
 function screenExport(){
   backAction=screenPrism;
-  const m=state.meta, rc=recordCount();
+  const m=state.meta, rc=plotCount();
   const nPts=state.points.filter(p=>p.covers.length>0).length;
   const nDep=state.depths.filter(d=>d.fbd!=null||d.litter!=null||d.duff!=null).length;
+  const rows=buildRows();
+  const preview = format==='flat' ? rows.slice(0,4).join('\n')+`\n… ${rows.length} rows for this plot` : rows[0];
   show(`
     <div class="navbar"><button class="navlink" id="back">← prism</button><span class="ctx">Review + add record</span><span style="width:50px"></span></div>
     <div class="summary mt10">
@@ -379,9 +411,9 @@ function screenExport(){
       <div class="r"><span>Points / depths</span><b>${nPts}/40 · ${nDep}/12</b></div>
       <div class="r"><span>Prism (BAF ${state.prism.baf})</span><b>${state.prism.hw}/${state.prism.con}/${state.prism.snag}/${state.prism.other}</b></div>
     </div>
-    <div class="filebar ${fileName?'':'warn'} mt14"><p class="lab">Saving to</p><p class="nm">${fileName||'no file'}</p><p class="meta">${rc} record(s) on device</p></div>
-    <p class="foot" style="text-align:left;margin-top:14px;">CSV row preview</p>
-    <div class="csvbox">${HEADER.join(',')}\n${buildRow()}</div>
+    <div class="filebar ${fileName?'':'warn'} mt14"><p class="lab">Saving to</p><p class="nm">${fileName||'no file'}</p><p class="meta">${rc} plot(s) · ${format==='flat'?'flat format':'data table'}</p></div>
+    <p class="foot" style="text-align:left;margin-top:14px;">CSV ${format==='flat'?'rows':'row'} preview</p>
+    <div class="csvbox">${activeHeader().join(',')}\n${preview}</div>
     <div class="spacer"></div>
     <button class="btn primary" id="add"><span>＋</span> Add record</button>
     <button class="btn ghost mt8" id="another">Start another plot</button>
@@ -396,10 +428,10 @@ function screenExport(){
 }
 function recordAddedScreen(){
   backAction=null;
-  const rc=recordCount();
+  const rc=plotCount();
   show(`
     <div class="spacer"></div>
-    <div class="modal" style="margin:0 auto;"><div class="ic ok">✓</div><h3>Record added</h3><p>${rc} record(s) saved in ${fileName}</p></div>
+    <div class="modal" style="margin:0 auto;"><div class="ic ok">✓</div><h3>Record added</h3><p>${rc} plot(s) saved in ${fileName}</p></div>
     <div class="spacer"></div>
     <button class="btn primary" id="dl">⬇ Download CSV (${rc})</button>
     <button class="btn go mt10" id="overstory">🌲 Collect overstory data</button>

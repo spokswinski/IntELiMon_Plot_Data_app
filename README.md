@@ -8,9 +8,10 @@ appended to a single file per site.
 
 ## What it does
 
-- **Project screen** — enter a 5-character site code, then **New file** (starts a fresh dataset)
-  or **Open existing** (imports a previously exported CSV so you can keep adding to it). The current
-  file and its record count are shown, with a **Download CSV** button.
+- **Project screen** — enter a 5-character site code, choose an **output format** (see below), then
+  **New file** (starts a fresh dataset) or **Open existing** (imports a previously exported CSV so
+  you can keep adding to it). The current file, its format, and its plot count are shown, with a
+  **Download CSV** button.
 - **Plot start** — plot name (defaults to `0001`), Operator 1 and Operator 2 initials, a
   **Manage categories** button (rename or clear any of the 10 cover labels, anytime), then
   **Scan started**, which stamps the date (`YYYYMMDD`) and time (`HHMM`).
@@ -92,9 +93,26 @@ re-upload. Phones pick up the new version the next time they open online.
 
 ---
 
+## Output format (Default data table vs Flat format)
+
+A toggle above **New file** picks how the main CSV is written. It's editable until a file exists,
+then locks to that file's format (start a new file to switch). **Open existing** auto-detects the
+format from the file it imports.
+
+- **Default data table** (wide) — one row per plot, the 33 columns in the schema below. Best for a
+  quick glance and simple per-plot tables.
+- **Flat format** (long / tidy) — one row per measured variable, columns
+  `site, plot, op1, date, time, op2, category, variable, value`. Each plot expands to ~27 rows
+  (`category` is cover / fuel / prism / depth / meta; `variable` is the measure name such as
+  `grass`, `fuel_1hr`, `CPBA`, `MFBD`, or `notes`; `value` is its value). Best for Excel pivot
+  tables and for stacking multiple teams' files together to reconcile — the identifier columns are
+  identical across formats, so files of the same format concatenate cleanly.
+
+Both formats share the same first six identifier columns, and the overstory file is unaffected.
+
 ## CSV schema
 
-### Main file (33 columns, one row per plot)
+### Main file — Default data table (33 columns, one row per plot)
 
 ```
 site, plot, op1, date, time, op2,
