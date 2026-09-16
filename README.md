@@ -1,7 +1,8 @@
 # IntELiMon Plot Data App
 
 An offline, installable field data collection app (PWA) for point-intercept, time-lag fuel,
-fuel-depth, and prism-cruise data. Built for **Android / Chrome**. Outputs one CSV row per plot,
+fuel-depth, and prism-cruise data. Built for **Android / Chrome**, but also works on iOS / Safari.
+Outputs one CSV row per plot,
 appended to a single file per site.
 
 ---
@@ -100,7 +101,7 @@ then locks to that file's format (start a new file to switch). **Open existing**
 format from the file it imports.
 
 - **Default data table** (wide) — one row per plot, the 33 columns in the schema below. Best for a
-  quick glance and simple per-plot tables.
+  single device teams and simple per-plot tables for data analysts.
 - **Flat format** (long / tidy) — one row per measured variable, columns
   `site, plot, op1, date, time, op2, category, variable, value`. Each plot expands to ~27 rows
   (`category` is cover / fuel / prism / depth / meta; `variable` is the measure name such as
@@ -109,6 +110,20 @@ format from the file it imports.
   identical across formats, so files of the same format concatenate cleanly.
 
 Both formats share the same first six identifier columns, and the overstory file is unaffected.
+
+### Switching format on an existing file
+
+The format is locked once a file exists, so moving from one format to the other means starting a
+**new file** — a single file can't hold both. Before you switch:
+
+1. On the project screen, tap **Download CSV** to save any data currently on the device. Starting a
+   new file clears it, so download first or that data is gone.
+2. Tap **New file** and confirm the clear — this unlocks the format toggle.
+3. Pick the other format, then tap **New file** again to create it.
+
+The file you downloaded stays in its original format. The two layouts don't stack together, so if
+you later need the old data alongside the new format you'd reshape it (pivot from wide, or
+re-aggregate from flat) rather than just concatenating.
 
 ## CSV schema
 
@@ -135,6 +150,26 @@ MFBD, MLD, MDD, notes
 - **`MFBD`/`MLD`/`MDD`** — mean fuel bed / litter / duff depth (cm), pooled across all 12 depth
   locations, 1 decimal.
 
+### Main file — Flat format (9 columns, ~27 rows per plot)
+
+```
+site, plot, op1, date, time, op2, category, variable, value
+```
+
+- **`op1` / `op2`** — Operator 1 and Operator 2 initials from the plot-start screen.
+- **`category`** — the measure group: `cover`, `fuel`, `prism`, `depth`, or `meta`.
+- **`variable`** — the measure name within the category: `grass`…`cat10` for `cover`,
+  `fuel_1hr`…`fuel_1000hr` for `fuel`, `BAF`/`HWPBA`/`CPBA`/`SPBA`/`OPBA`/`HW_in`/`CON_in`/`SNAG_in`/`OTH_in`
+  for `prism`, `MFBD`/`MLD`/`MDD` for `depth`, and `notes` for `meta`. These are the same names as
+  the wide columns.
+- **`value`** — the value for that variable: a cover count, a running fuel tally, a BAF, a computed
+  basal area (`count × BAF`), a raw in-tree count, a depth mean, or the note text. The same
+  aggregation rules as the wide format apply — cover counts need not sum to 40, and depth means are
+  pooled across the 12 depth locations.
+- Every row for a plot repeats the six identifier columns, so each plot expands to ~27 rows.
+  Because the identifier columns are identical to the wide format, files of the **same** format
+  stack cleanly for reconciliation across teams.
+
 ### Overstory file (`SITE_overstory.csv`, one row per species entry)
 
 ```
@@ -148,9 +183,13 @@ skipped. Download it from the overstory finish screen or the project screen.
 
 ## Notes / limits
 
-- Designed for Android Chrome (also works on desktop Chrome). Records live in the browser's local
+- Designed for Android Chrome (also works on desktop Chrome), but also works on iOS / Safari.
+  Records live in the browser's local
   storage for this site — **download the CSV regularly**, and don't clear the browser's site data
   for the app without exporting first.
 - **New file** clears the current on-device records to start fresh (it warns you first). Download
   the existing file before starting a new one if you still need it.
-- The iOS build discussed separately will share this same storage-and-export model.
+- On iOS / Safari the app runs and stores data the same way, and installs via Safari's
+  **Share → Add to Home Screen** action (there's no automatic install prompt on iOS). One caveat:
+  iOS may clear a web app's local storage after about a week without opening it, so on iOS
+  especially, **download your CSV after each session**.
