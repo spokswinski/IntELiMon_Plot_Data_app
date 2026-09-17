@@ -128,21 +128,49 @@ const BG_INDEX = COVER_DEFAULTS.findIndex(c=>c.slug==='BG');
 const DEPTH_DISTS = [0.5,3.5,6.5,13.5,16.5,19.5];
 const DEPTH_MAX = {fbd:140, litter:20, duff:10};
 const BAF_OPTIONS = [5,10,20,25,30,40];
-const HEADER = [
-  'site','plot','op1','date','time','op2',
-  'grass','forbs','woody','cat11','cat12','cat13','fine_lit','decid_lit','SNLIT','LNLIT','BG','cat9','cat10',
-  'fuel_1hr','fuel_10hr','fuel_100hr','fuel_1000hr',
-  'BAF','HWPBA','CPBA','SPBA','OPBA','HW_in','CON_in','SNAG_in','OTH_in',
-  'MFBD','MLD','MDD','notes'
+const PRISM_DEFAULTS = [
+  {slug:'hw',    label:'Hardwoods in'},
+  {slug:'con',   label:'Conifers in'},
+  {slug:'snag',  label:'Snags in'},
+  {slug:'other', label:'Other in'}
 ];
+
+/* ---------- export column names, derived from current category labels ---------- */
+/* Falls back to the internal slug only when a slot has never been named (e.g. an
+   unused cover slot). Prism labels are never blank, so no fallback is needed there. */
+function colName(label, fallback){ const s=(label||'').trim(); return s || fallback; }
+function buildHeader(){
+  return [
+    'site','plot','op1','date','time','op2',
+    ...COVER_DEFAULTS.map((c,i)=>colName(cats.cover[i], c.slug)),
+    'fuel_1hr','fuel_10hr','fuel_100hr','fuel_1000hr',
+    'BAF',
+    ...PRISM_DEFAULTS.map((c,i)=>colName(cats.prism[i], c.label)+' PBA'),
+    ...PRISM_DEFAULTS.map((c,i)=>colName(cats.prism[i], c.label)),
+    'MFBD','MLD','MDD','notes'
+  ];
+}
 const QUADS = ['NW','NE','SE','SW'];
 const STATUS_OPTIONS = ['','Live','Snag','Scorched','Insect damage','Catface scar'];
+const COUNT_OPTIONS = ['', ...Array.from({length:20},(_,i)=>String(i+1))];
 const OVERSTORY_ROWS = 25;
 const OVERSTORY_HEADER = ['site','plot','date','quadrant','species','status','count'];
 const HEADER_FLAT = ['site','plot','op1','date','time','op2','category','variable','value'];
 
 /* ---------- category label persistence ---------- */
-function loadCats(){ try{const s=JSON.parse(localStorage.getItem('intelimon_cats')); if(s&&Array.isArray(s.cover)&&s.cover.length===COVER_DEFAULTS.length)return s;}catch(e){} return {cover:COVER_DEFAULTS.map(c=>c.label), otherIn:'Other in'}; }
+function loadCats(){
+  try{
+    const s=JSON.parse(localStorage.getItem('intelimon_cats'));
+    if(s&&Array.isArray(s.cover)&&s.cover.length===COVER_DEFAULTS.length){
+      if(!Array.isArray(s.prism)||s.prism.length!==PRISM_DEFAULTS.length){
+        s.prism=PRISM_DEFAULTS.map(c=>c.label);
+        if(s.otherIn) s.prism[PRISM_DEFAULTS.findIndex(c=>c.slug==='other')]=s.otherIn;
+      }
+      return s;
+    }
+  }catch(e){}
+  return {cover:COVER_DEFAULTS.map(c=>c.label), prism:PRISM_DEFAULTS.map(c=>c.label)};
+}
 function saveCats(){ localStorage.setItem('intelimon_cats', JSON.stringify(cats)); }
 let cats = loadCats();
 
@@ -154,7 +182,7 @@ let fileName = localStorage.getItem('intelimon_filename') || null;
 function setFileName(n){ fileName=n; localStorage.setItem('intelimon_filename', n); }
 let format = localStorage.getItem('intelimon_format') || 'wide';
 function setFormat(f){ format=f; localStorage.setItem('intelimon_format', f); }
-function activeHeader(){ return format==='flat'?HEADER_FLAT:HEADER; }
+function activeHeader(){ return format==='flat'?HEADER_FLAT:buildHeader(); }
 function detectFormat(cols){ return cols.indexOf('variable')>=0?'flat':'wide'; }
 function plotCount(){ const s=new Set(); loadRecords().forEach(l=>{const c=l.split(','); if(c.length>3)s.add(c[0]+'|'+c[1]+'|'+c[3]);}); return s.size; }
 
@@ -204,10 +232,11 @@ function buildRowsFlat(){
   const m=state.meta,f=state.fuel,pr=state.prism,ct=coverTotals();
   const id=[m.site,m.plot,m.obs,m.date,m.time,m.operator], out=[];
   const push=(cat,vn,val)=>out.push(id.concat([cat,vn,val]).map(esc).join(','));
-  COVER_DEFAULTS.forEach(c=>push('cover',c.slug,ct[c.slug]));
+  COVER_DEFAULTS.forEach((c,i)=>push('cover', colName(cats.cover[i], c.slug), ct[c.slug]));
   push('fuel','fuel_1hr',f.oneHr);push('fuel','fuel_10hr',f.tenHr);push('fuel','fuel_100hr',f.hundredHr);push('fuel','fuel_1000hr',f.thousandHr);
-  push('prism','BAF',pr.baf);push('prism','HWPBA',pr.hw*pr.baf);push('prism','CPBA',pr.con*pr.baf);push('prism','SPBA',pr.snag*pr.baf);push('prism','OPBA',pr.other*pr.baf);
-  push('prism','HW_in',pr.hw);push('prism','CON_in',pr.con);push('prism','SNAG_in',pr.snag);push('prism','OTH_in',pr.other);
+  push('prism','BAF',pr.baf);
+  PRISM_DEFAULTS.forEach((c,i)=>push('prism', colName(cats.prism[i], c.label)+' PBA', pr[c.slug]*pr.baf));
+  PRISM_DEFAULTS.forEach((c,i)=>push('prism', colName(cats.prism[i], c.label), pr[c.slug]));
   push('depth','MFBD',depthMean('fbd'));push('depth','MLD',depthMean('litter'));push('depth','MDD',depthMean('duff'));
   push('meta','notes',m.notes);
   return out;
@@ -215,7 +244,7 @@ function buildRowsFlat(){
 function buildRows(){ return format==='flat'?buildRowsFlat():[buildRow()]; }
 function addRecord(){const r=loadRecords(); buildRows().forEach(x=>r.push(x)); saveRecords(r); return true;}
 function hasDuplicate(){const m=state.meta; return loadRecords().some(l=>{const c=l.split(',');return c[0]===m.site&&c[1]===m.plot&&c[3]===m.date;});}
-function exportCSV(){const r=loadRecords(); downloadText(activeHeader().join(',')+'\n'+r.join('\n')+(r.length?'\n':''), fileName||'intelimon.csv'); }
+function exportCSV(){const r=loadRecords(); downloadText(activeHeader().map(esc).join(',')+'\n'+r.join('\n')+(r.length?'\n':''), fileName||'intelimon.csv'); }
 
 /* ---------- overstory store (separate SITE_overstory.csv) ---------- */
 function loadOver(){ try{return JSON.parse(localStorage.getItem('intelimon_overstory')||'[]');}catch(e){return [];} }
@@ -306,7 +335,7 @@ function screenPlotStart(){
       <div class="field"><label>Operator 2 initials</label><input id="oper" class="code" maxlength="4" value="${state.meta.operator}"/></div>
     </div>
     <button class="btn" id="mgcats">✎ Manage categories</button>
-    <p class="foot">Rename or clear any of the 10 cover labels, anytime</p>
+    <p class="foot">Rename cover or prism category labels, anytime</p>
     <div class="spacer"></div>
     <button class="btn go" id="scan">▶ Scan started</button>
     <p class="foot">Logs date (YYYYMMDD) + time (HHMM) when pressed</p>
@@ -379,23 +408,29 @@ function screenDepth(d){
 function screenPrism(){
   backAction=()=>{state.idx=state.seq.length-1; renderSeq();};
   const pr=state.prism;
-  const t=(k,lab,v,edit)=>`<div class="tally"><button class="stepbtn" data-dec="${k}">−</button><div class="mid"><div class="t-lab">${lab}${edit?' ✎':''}</div><div class="t-val" id="pv-${k}">${v}</div></div><button class="stepbtn" data-inc="${k}">＋</button></div>`;
+  const t=(k,lab)=>`<div class="tally" data-slot="${k}"><button class="stepbtn" data-dec="${k}">−</button><div class="mid"><div class="t-lab">${lab} ✎</div><div class="t-val" id="pv-${k}">${pr[k]}</div></div><button class="stepbtn" data-inc="${k}">＋</button></div>`;
+  const talliesHtml=PRISM_DEFAULTS.map((c,i)=>t(c.slug,cats.prism[i])).join('');
   show(`
     <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Prism data</span><button class="navlink" id="next">next →</button></div>
     <p class="sub">Variable-radius cruise</p>
     <div class="field mt14" style="display:flex;align-items:center;gap:12px;"><label style="margin:0;min-width:60px;">BAF</label><select id="baf">${BAF_OPTIONS.map(o=>`<option ${o===pr.baf?'selected':''}>${o}</option>`).join('')}</select></div>
-    <div class="tallies">${t('hw','Hardwoods in',pr.hw)}${t('con','Conifers in',pr.con)}${t('snag','Snags in',pr.snag)}<div id="otherbox">${t('other',cats.otherIn,pr.other,true)}</div></div>
+    <div class="tallies">${talliesHtml}</div>
     <div class="prismnote" id="pnote"></div>
+    <p class="foot">Hold a category to rename it</p>
     <div class="spacer"></div><button class="btn primary" id="toexport">Continue to export →</button>
   `);
-  const upNote=()=>{$('pnote').innerHTML=`Basal area = count × BAF, computed on export.<br>e.g. conifers ${pr.con} × ${pr.baf} = <b>${pr.con*pr.baf} ft²/ac</b> → CPBA`;};
+  const upNote=()=>{$('pnote').innerHTML=`Basal area = count × BAF, computed on export.<br>e.g. ${cats.prism[1].toLowerCase()} ${pr.con} × ${pr.baf} = <b>${pr.con*pr.baf} ft²/ac</b> → CPBA`;};
   upNote();
   $('baf').onchange=e=>{pr.baf=+e.target.value; upNote(); saveSession();};
   document.querySelectorAll('#app [data-inc]').forEach(b=>b.onclick=()=>{const k=b.dataset.inc;pr[k]++;$('pv-'+k).textContent=pr[k];upNote();saveSession();});
   document.querySelectorAll('#app [data-dec]').forEach(b=>b.onclick=()=>{const k=b.dataset.dec;if(pr[k]>0)pr[k]--;$('pv-'+k).textContent=pr[k];upNote();saveSession();});
-  let timer=null,held=false; const ob=$('otherbox');
-  ob.addEventListener('touchstart',()=>{held=false;timer=setTimeout(()=>{held=true;renamePrompt(cats.otherIn,'Prism "Other" label',v=>{cats.otherIn=v.trim()||'Other in';saveCats();screenPrism();});},550);},{passive:true});
-  ob.addEventListener('touchend',()=>clearTimeout(timer));
+  document.querySelectorAll('#app .tally').forEach(el=>{
+    const k=el.dataset.slot, i=PRISM_DEFAULTS.findIndex(c=>c.slug===k);
+    let timer=null;
+    el.addEventListener('touchstart',()=>{timer=setTimeout(()=>{renamePrompt(cats.prism[i], PRISM_DEFAULTS[i].slug==='other'?'Prism "Other" label':'Prism label', v=>{cats.prism[i]=v.trim()||PRISM_DEFAULTS[i].label; saveCats(); screenPrism();});},550);},{passive:true});
+    el.addEventListener('touchend',()=>clearTimeout(timer));
+    el.addEventListener('touchmove',()=>clearTimeout(timer),{passive:true});
+  });
   $('back').onclick=backAction; $('next').onclick=screenExport; $('toexport').onclick=screenExport;
 }
 
@@ -454,10 +489,11 @@ function screenOverstory(qi){
   if(!state.overstoryPages) state.overstoryPages=[];
   if(!state.overstoryPages[qi]) state.overstoryPages[qi]={quad:QUADS[qi], rows:Array.from({length:OVERSTORY_ROWS},()=>({sp:'',st:'',ct:''}))};
   const page=state.overstoryPages[qi];
-  const readOver=()=>{ const q=$('quad'); if(q)page.quad=q.value; page.rows.forEach((r,idx)=>{ const sp=root.querySelector('[data-sp="'+idx+'"]'), st=root.querySelector('[data-st="'+idx+'"]'), ct=root.querySelector('[data-ct="'+idx+'"]'); if(sp)r.sp=sp.value; if(st)r.st=(st.value==='—'?'':st.value); if(ct)r.ct=ct.value.trim(); }); };
+  const readOver=()=>{ const q=$('quad'); if(q)page.quad=q.value; page.rows.forEach((r,idx)=>{ const sp=root.querySelector('[data-sp="'+idx+'"]'), st=root.querySelector('[data-st="'+idx+'"]'), ct=root.querySelector('[data-ct="'+idx+'"]'); if(sp)r.sp=sp.value; if(st)r.st=(st.value==='—'?'':st.value); if(ct)r.ct=(ct.value==='—'?'':ct.value); }); };
   backAction = qi>0 ? ()=>{readOver(); screenOverstory(qi-1);} : ()=>{readOver(); recordAddedScreen();};
   const statusSel=(sel)=>STATUS_OPTIONS.map(o=>`<option ${o===sel?'selected':''}>${o||'—'}</option>`).join('');
-  const rowsHtml=page.rows.map((r,idx)=>`<div class="over-row"><input class="sp" data-sp="${idx}" value="${he(r.sp)}" placeholder="${idx<3?'code':'—'}"/><select data-st="${idx}">${statusSel(r.st)}</select><input data-ct="${idx}" inputmode="numeric" value="${he(r.ct)}"/></div>`).join('');
+  const countSel=(sel)=>COUNT_OPTIONS.map(o=>`<option ${o===sel?'selected':''}>${o||'—'}</option>`).join('');
+  const rowsHtml=page.rows.map((r,idx)=>`<div class="over-row"><input class="sp" data-sp="${idx}" value="${he(r.sp)}" placeholder="${idx<3?'code':'—'}"/><select data-st="${idx}">${statusSel(r.st)}</select><select data-ct="${idx}">${countSel(r.ct)}</select></div>`).join('');
   show(`
     <div class="navbar"><button class="navlink" id="back">← back</button><span class="ctx">Overstory · quadrant ${qi+1} / 4</span>${qi<3?'<button class="navlink" id="next">next →</button>':'<span style="width:44px"></span>'}</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><label style="margin:0;min-width:58px;">Quadrant</label><select id="quad">${QUADS.map(q=>`<option ${q===page.quad?'selected':''}>${q}</option>`).join('')}</select></div>
@@ -488,10 +524,15 @@ function overstoryDone(){
 
 /* ---------- category manager ---------- */
 function manageCategories(){
-  const rows=cats.cover.map((lbl,i)=>`<div class="catrow"><span class="g">${COVER_DEFAULTS[i].group}</span><span class="nm ${lbl?'':'empty'}">${lbl?he(lbl):'(blank)'}</span><button data-edit="${i}">Edit</button>${lbl?`<button data-clear="${i}">Clear</button>`:''}</div>`).join('');
-  overlay.innerHTML=`<div class="modal-bg"><div class="modal"><h3>Cover categories</h3><div class="catmgr">${rows}</div><button class="btn primary mt14" id="cm-done">Done</button></div></div>`;
+  const coverRows=cats.cover.map((lbl,i)=>`<div class="catrow"><span class="g">${COVER_DEFAULTS[i].group}</span><span class="nm ${lbl?'':'empty'}">${lbl?he(lbl):'(blank)'}</span><button data-edit="${i}">Edit</button>${lbl?`<button data-clear="${i}">Clear</button>`:''}</div>`).join('');
+  const prismRows=cats.prism.map((lbl,i)=>`<div class="catrow"><span class="g">Prism</span><span class="nm">${he(lbl)}</span><button data-pedit="${i}">Edit</button></div>`).join('');
+  overlay.innerHTML=`<div class="modal-bg"><div class="modal"><h3>Categories</h3><div class="catmgr">
+    <div class="grouplab">Cover (points)</div>${coverRows}
+    <div class="grouplab" style="margin-top:10px;">Prism (tally)</div>${prismRows}
+  </div><button class="btn primary mt14" id="cm-done">Done</button></div></div>`;
   overlay.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const i=+b.dataset.edit; renamePrompt(cats.cover[i]||'', COVER_DEFAULTS[i].group+' slot', v=>{cats.cover[i]=v.trim(); saveCats(); manageCategories();});});
   overlay.querySelectorAll('[data-clear]').forEach(b=>b.onclick=()=>{const i=+b.dataset.clear; cats.cover[i]=''; saveCats(); manageCategories();});
+  overlay.querySelectorAll('[data-pedit]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pedit; renamePrompt(cats.prism[i], 'Prism label', v=>{cats.prism[i]=v.trim()||PRISM_DEFAULTS[i].label; saveCats(); manageCategories();});});
   $('cm-done').onclick=clearOverlay;
 }
 
